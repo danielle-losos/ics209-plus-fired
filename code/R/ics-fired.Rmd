@@ -1,0 +1,865 @@
+---
+title: "ics+fired"
+output: html_document
+---
+
+# Linking ICS-209-PLUS to FIRED (ICS+FIRED)
+
+```{r setup, include=F, echo=F, warning=F, error=F}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+source("setup.R")
+```
+
+```{r}
+# Grab a glimpse of the data
+glimpse(ics.west)
+```
+
+Plot burned area reported by the ICS-209-PLUS West-wide.
+
+```{r fig.width=5, fig.height=3}
+tmp <- ics.west %>% group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup()
+top5 <- tmp %>% slice_max(burned_area, n=5)
+rm(tmp)
+ics.west.grp <- ics.west %>%
+  group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup()
+# Plot
+f1 <- ics %>% group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup() %>%
+  ggplot(aes(x=START_YEAR, y=burned_area)) +
+  geom_line(data=ics.west.grp, aes(x=START_YEAR, y=burned_area, color="Western U.S."), position="stack",
+            linetype = 4, size = 1.05) +
+  geom_text(data=. %>% filter(START_YEAR %in% top5$START_YEAR), 
+            aes(label=paste(round(burned_area / 1e6, 1), "M")),
+            position=position_nudge(x=-1.2,y=4), size=3) +
+  geom_line() +
+  geom_point(shape=21, size = 3, color = "gray30", fill = "red") +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
+  scale_x_continuous(limits=c(1999, 2020)) +
+  scale_color_manual(name = "", values=c("Western U.S."="#de2d26")) +
+  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="Western U.S. Burned Area (1999-2020)\n") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 12, hjust=-0.4),
+        legend.position=c(0.2, 1.1))
+f1
+ggsave(f1, file = "../../figs/BurnedArea_1999to2020.png",
+       width=5, height=3, dpi = 300) # adjust dpi accordingly
+```
+
+There were 2,360 wildfire incidents between 1999-2020 across CONUS which destroyed at least one residential structure. This represents a mere 7.19% of incidents. 
+
+```{r}
+dim(ics %>% filter(STR_DESTROYED_RES_TOTAL > 0))[1]
+dim(ics %>% filter(STR_DESTROYED_RES_TOTAL > 0))[1] / dim(ics)[1] * 100
+```
+
+The West accounts for 85% of wildfire-related home loss. With TX and OK included, 97% of home loss.
+
+```{r}
+sum(ics.west$STR_DESTROYED_RES_TOTAL) / sum(ics$STR_DESTROYED_RES_TOTAL) * 100
+sum(ics.west$STR_DESTROYED_RES_TOTAL) / sum(ics$STR_DESTROYED_RES_TOTAL) * 100
+sum(ics.west.plus$STR_DESTROYED_RES_TOTAL) / sum(ics$STR_DESTROYED_RES_TOTAL) * 100
+```
+
+Plot structures destroyed by incident.
+
+```{r fig.height=3.5, fig.width=6}
+# Grab the top 15
+top10 <- ics.west %>% slice_max(STR_DESTROYED_RES_TOTAL, n=10)
+# Plot and label
+f2 <- ggplot(data=ics.west, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL, group=factor(INCIDENT_NAME), 
+                          fill=STR_DESTROYED_RES_TOTAL), color="grey10") +
+  geom_bar(stat="identity", position='stack') +
+  scale_fill_viridis_c(option="plasma", trans="sqrt") +
+  labs(x="Ignition Year\n", y="Homes Destroyed\n", fill="",
+       title="Homes destroyed by Western wildfires (1999-2020)\n",
+       caption="Maxwell C. Cook, PhD Student, Department of Geography\nData source: St. Denis et al., 2020 (updated)") +
+  ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top10$INCIDENT_ID), 
+                           aes(label=INCIDENT_NAME), position=position_jitterdodge(0.5), size = 2) +
+  theme_minimal() +
+    # coord_cartesian(ylim=c(0, 1150)) +
+  theme(plot.title = element_text(size = 12),
+        plot.subtitle = element_text(size=8),
+        plot.caption = element_text(size=7),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_text(size=9),
+        axis.text.y = element_text(size=8),
+        axis.text.x = element_text(size=8),
+        legend.position="none")
+f2
+ggsave(f2, file = "../../figs/Westwide_HomeLoss_1999to2020.png",
+       width=6, height=3.5, dpi = 300) # adjust dpi accordingly
+```
+
+Plot cumulative residential structures destroyed from ICS-209-PLUS for CONUS and West.
+
+```{r warning=F, message=F, fig.width=5, fig.height=3}
+# Get some text
+sum(ics.west$STR_DESTROYED_RES_TOTAL)
+sum(ics$STR_DESTROYED_RES_TOTAL)
+## Group sum ics.west
+ics.west.grp <- ics.west %>% 
+  group_by(START_YEAR) %>%
+  summarize(destr_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
+  mutate(destr_res_c = cumsum(destr_res))
+# plot
+f3 <- ics %>% as_tibble() %>%
+  group_by(START_YEAR) %>%
+  summarize(destr_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
+  mutate(destr_res_c = cumsum(destr_res)) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_area(aes(x=START_YEAR, y=destr_res_c), position='stack', fill="grey60") +
+  geom_line(data=ics.west.grp, aes(x=START_YEAR, y=destr_res_c, color="Western U.S."), position="stack",
+            linetype = 4, size = 1.05) +
+  scale_color_manual(name = "", values=c("Western U.S."="black")) +
+  scale_y_continuous(labels = scales::label_number(suffix = " K", scale = 1e-3)) + 
+  labs(x="Ignition Year", y="Structures Destroyed",
+       title="Homes destroyed by wildfire (1999-2020)\n")+
+  # annotation_custom(grob) +
+  theme_minimal() +
+  theme(legend.position=c(0.2, 1.1))
+f3
+ggsave(f3, file = "../../figs/Cumulative_HomeLoss_1999to2020.png",
+       width=5, height=3, dpi = 300) # adjust dpi accordingly
+```
+
+## Joining ICS-209-PLUS with FIRED (ICS+FIRED)
+
+```{r}
+# Remove records reporting 0 acres
+ics.west <- ics.west %>% filter(FINAL_ACRES != 0, START_YEAR >= 2001)
+# Buffer incident points by 50km
+ics.buff <- st_buffer(ics.west, 50000)
+# Join to any overlapping FIRED perimeters
+buff.fired <- st_join(fired.west, ics.buff, join=st_intersects, left=FALSE)
+# Start create some difference attributes
+buff.fired <- buff.fired %>% 
+  mutate(date_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days")))),
+         area_perc_diff = (FINAL_KM2 / tot_ar_km2)*100,
+         area_abs_diff = abs(FINAL_KM2 - tot_ar_km2),
+         area_change_diff = round((abs((tot_ar_km2 - FINAL_KM2) / FINAL_KM2) * 100), 4))
+```
+
+Filter the overlapping events/incidents by size, ignition date.
+
+```{r}
+date.filter <- buff.fired %>% 
+  filter(START_YEAR == ig_year,
+         date_diff <= 32)
+area.filter <- date.filter %>% 
+  group_by(INCIDENT_ID) %>%
+  filter(area_change_diff == min(area_change_diff),
+         date_diff == min(date_diff)) %>%
+  ungroup()
+# Check duplicates
+dim(area.filter %>% group_by(id) %>% filter(n()>1))[1]
+dim(area.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+```
+
+
+Find ICS-west incidents with single MTBS link (i.e., not complex incidents with multiple fire perimeters).
+
+```{r}
+ics.mtbs <- ics.west %>% filter(FOD_FIRE_NUM == 1 & !is.na(MTBS_FIRE_NAME))
+# How many have single MTBS IDs?
+paste("ICS-westwide incidents w/ single MTBS Info: ", dim(ics.mtbs)[1])
+# How many match an MTBS record?
+paste("Number of matching IDs: ", dim(ics.mtbs %>% filter(MTBS_ID %in% mtbs$MTBS_ID))[1])
+```
+
+```{r warning=F, fig.height=3.5, fig.width=3}
+# Join ICS-209-PLUS west-wide to MTBS
+mtbs.ics <- inner_join(mtbs %>% as_tibble(), ics.mtbs, by="MTBS_ID") %>% st_as_sf()
+grob <- grobTree(
+   textGrob(
+     paste("MTBS Joins: ", dim(mtbs.ics)[1], sep=""), 
+            x=0.60,  y=0.95, hjust=0, 
+     gp=gpar(col="grey20", fontsize=7, fontface="italic")))
+# Create a simple map
+ggplot() +
+  geom_sf(data=ics.west, color="gray60", size=0.2, alpha=0.8) +
+  geom_sf(data=st_centroid(mtbs.ics), color="gray10", size=0.5) +
+  geom_sf(data=west, fill=NA, color="gray20", size=0.8) +
+  annotation_custom(grob) +
+  theme_minimal()
+```
+
+Find overlapping FIRED events based on MTBS perimeters.
+
+```{r warning=F}
+# Perform a spatial overlay "st_join"
+mtbs.fired <- st_join(mtbs.ics, fired, join=st_intersects)
+dim(mtbs.fired)
+```
+
+Filter the 11,838 records down based on spatial and temporal thresholds.
+
+```{r}
+# First, filter by temporal thresholds
+# Add a date difference (days) column
+mtbs.fired <- mtbs.fired %>% 
+  mutate(daydiff = abs(as.numeric(difftime(ig_date, DISCOVERY_DATE, units='days'))))
+# generous filter of abs(50) difference in days,
+# there should not be any fires with an ignition difference > 50 days
+fil <- mtbs.fired %>% filter(daydiff <= 50)
+paste("Ignition day difference filter: ", dim(fil)[1])
+# Now, group by incident ID and find the lowest acre difference
+fil <- fil %>%
+  mutate(sizediff = abs(FINAL_KM2-tot_ar_km2),
+         hulldiff = abs(FINAL_KM2-hull_km2),
+         perc_area_diff = abs((FINAL_KM2 / tot_ar_km2)*100),
+         lowdiff = if_else(sizediff < hulldiff, sizediff, hulldiff),
+         durdiff = abs(WF_GROWTH_DURATION - event_dur)) 
+summary(fil$sizediff)
+summary(fil$durdiff)
+# Filter by size difference
+fil <- fil %>%
+  group_by(INCIDENT_ID) %>%
+  filter(lowdiff == min(lowdiff)) %>%
+  ungroup()
+# Check
+paste("Additional burned area difference filter: ", dim(fil)[1])
+# Print some summaries
+summary(fil$daydiff)
+summary(fil$sizediff)
+# Check for duplicate records
+print("Duplicate Records: ")
+dim(fil %>% group_by(id) %>% filter(n()>1))[1]
+dim(fil %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+# Handle duplicate records 
+fil <- fil %>% group_by(INCIDENT_ID) %>%
+  filter()
+# Write to file
+# st_write(sub.sub, "ics209/data/ics-fired/ics_to_mtbs_fired.gpkg", append=FALSE, overwrite=TRUE)
+```
+
+Handle missingness in 'FINAL_ACRES' by comparing to FOD Acres where possible.
+
+```{r}
+zeros <- ics.west %>% 
+  filter(FINAL_ACRES == 0) %>%
+  mutate(FOD_FINAL_ACRES = if_else(is.na(FOD_FINAL_ACRES), FINAL_ACRES, FOD_FINAL_ACRES),
+         FINAL_ACRES = if_else(FINAL_ACRES < FOD_FINAL_ACRES, FOD_FINAL_ACRES, FINAL_ACRES))
+ics.west <- ics.west %>% 
+  filter(FINAL_ACRES != 0) %>%
+  bind_rows(., zeros) %>%
+  mutate(FINAL_KM2 = FINAL_ACRES*0.00404686)
+```
+
+Buffer Xkm around incident POO, identify all overlapping wildfire events, compare attributes.
+
+```{r warning=F}
+# Only 2001-2020
+ics.west <- ics.west %>% filter(START_YEAR >= 2001, FINAL_ACRES != 0)
+# Buffer incident points by 35km
+ics.buff <- st_buffer(ics.west, 35000)
+# Join to any overlapping FIRED perimeters
+buff.fired <- st_join(fired, ics.buff, join=st_intersects, left=FALSE)
+# Start create some difference attributes
+buff.fired <- buff.fired %>% 
+  mutate(date_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days")))),
+         area_perc_diff = (FINAL_KM2 / tot_ar_km2)*100,
+         area_abs_diff = abs(FINAL_KM2 - tot_ar_km2),
+         area_change_diff = round((abs((tot_ar_km2 - FINAL_KM2) / FINAL_KM2) * 100), 4))
+summary(buff.fired$date_diff)
+summary(buff.fired$area_perc_diff)
+summary(buff.fired$area_abs_diff)
+summary(buff.fired$area_change_diff)
+# Start filtering down
+# Beginning with generous date filer (within 30 days)
+fil1 <- buff.fired %>% filter(date_diff <= 30)
+# Check for duplicates
+dim(fil1 %>% group_by(id) %>% filter(n()>1))[1]
+dim(fil1 %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+# Further filter by percent difference in burned area
+fil2 <- fil1 %>% filter(area_change_diff <= 50)
+# Check for duplicates
+dim(fil2 %>% group_by(id) %>% filter(n()>1))[1]
+dim(fil2 %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+summary(fil2$area_change_diff)
+# Work with minimum differences
+fil3 <- fil2 %>% group_by(INCIDENT_ID) %>%
+  filter(date_diff <= median(date_diff),
+         area_change_diff <= median(area_change_diff)) %>%
+  ungroup() %>% group_by(id) %>%
+  filter(date_diff <= median(date_diff),
+         area_change_diff <= median(area_change_diff)) %>%
+  ungroup()
+# Check for duplicates
+dim(fil3 %>% group_by(id) %>% filter(n()>1))[1]
+dim(fil3 %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+summary(fil3$area_change_diff)
+# # Write out to file
+setwd('C:/Users/mccoo/OneDrive/mcook/')
+st_write(fil3, "ics209/data/ics-fired/fil3_qaqc.gpkg", append=F, overwrite=T)
+# # Using compare attributes function
+# filter <- compare_attr(buff.fired)
+```
+
+```{r}
+
+```
+
+Isolate ICS-209-PLUS records which have MTBS information. 
+
+```{r}
+# convert "" to NA for MTBS Info
+ics <- ics %>% mutate(MTBS_ID = if_else(MTBS_ID=='', NA_character_, MTBS_ID))
+ics.mtbs <- ics %>% filter(!is.na(MTBS_ID)) %>% mutate(FINAL_HA = FINAL_ACRES*0.404686)
+paste("ICS-209-PLUS Records with MTBS Information: ", dim(ics %>% filter(!is.na(MTBS_ID)))[1])
+paste("Incidents w/ MTBS; Number of Matching IDs: ", dim(ics.mtbs %>% filter(MTBS_ID %in% mtbs$MTBS_ID))[1])
+paste("Incidents w/ MTBS; Burned Area (ha): ", round(sum(ics.mtbs$FINAL_HA), 2))
+paste("Incidents w/ MTBS; Structures Destroyed (Residential): ", round(sum(ics.mtbs$STR_DESTROYED_RES_TOTAL), 2))
+print("Summary of Hectares burned by incidents with MTBS link: ...")
+summary(ics.mtbs$FINAL_HA)
+```
+
+In the above summaries, there are a handful of incidents with reported acreage of 0. We can try to resolve this by using the associated MTBS records, but this is something to watch out for.
+
+Join to MTBS. Check for duplicates. Keep only distinct records for now.
+
+```{r}
+# inner join
+mtbs.join <- inner_join(ics%>%as_tibble(), mtbs%>%as_tibble(), by="MTBS_ID")
+dim(mtbs.join)[1]
+# Check for duplicates
+dim(mtbs.join %>% group_by(MTBS_ID) %>% filter(n()>1))[1]
+# isolate and export for QA/QC
+dup <- mtbs.join %>% group_by(MTBS_ID) %>% filter(n()>1)
+dup <- mtbs.join %>% filter(MTBS_ID %in% dup$MTBS_ID)
+write.csv(dup, "ics209/data/ics-fired/tables/duplicate_mtbs_records.csv")
+# filter to grab only non-duplicated records
+mtbs.join <- mtbs.join %>% 
+  filter(!MTBS_ID %in% dup$MTBS_ID) %>%
+  distinct(.keep_all = T)
+```
+
+```{r warning=F}
+mtbs.sub <- mtbs %>% filter(MTBS_ID %in% mtbs.join$MTBS_ID)
+mtbs.fired <- st_join(fired,mtbs.sub,join=st_intersects)
+rm(mtbs.sub)
+```
+
+```{r}
+mtbs.fired <- mtbs.fired %>% filter(!is.na(MTBS_ID))
+# filter by year
+mtbs.fired <- mtbs.fired %>% filter(ig_year == MTBS_YEAR)
+```
+
+```{r REVISIT}
+# Handle some manual updates to the 209s prior to starting the join
+inci209 <- inci209 %>% 
+  mutate(
+    FINAL_KM2 = if_else(INCIDENT_NAME=="SOUTHEAST TEXAS FIRE COMPLEX", 168.5313, FINAL_KM2)
+  )
+```
+
+# Joining ICS-209-PLUS Reports and FIRED Perimeters
+
+This document outlines the workflow for joining incident command reports to their respective fire perimeters from the FIRED data set. The 209s contain important information about suppression resources and expenditures, values at risk, and fire conditions. The ICS-209-PLUS database includes "incident reports" which summarize daily situation reports put out by the incident command during the wildfire event. These reports have also been linked to the FOD database where possible, offering information about final fire size, location, and links to the MTBS database. In order to leverage these human-reporting systems in combination with daily polygons of fire growth detected from the MODIS Burned Area Product (MODIS FIRED), we joined the two sources using either linkage with FOD and MTBS or by implementing a spatial-temporal buffer around point of origins in the ICS-209-PLUS and searching for matching FIRED events.
+
+ICS-209-PLUS was published in 2020 for fire events between 1999-2014. In the first attempt of the join, we focus only on events between 2001-2013. Data from 2014-2018 are currently being updated and will be joined separately (as outlined in this document).
+
+## Part 1. Joining ICS-209-PLUS to FIRED Events using the MTBS ID
+
+We can first isolate records that have accurate FOD linkage and MTBS IDs associated. To start with, we will try to link incident reports from 2001-2018 which have an MTBS ID to their respective MTBS perimeter. These perimeters provide an accurate spatial extent for the fire event that we can use to search the FIRED database using spatial overlap.
+
+```{r}
+##########################################################################
+###Start of by joining incidents (209s) to their MTBS perimeter for 2001-2018
+###This subset is only records with FOD linkage (not subject to change)
+###Use only fires with 1 recorded perimeter first (handle complexes separately)
+###Isolate MTBS ID and remove bad characters
+##########################################################################
+inci.mtbs.fired <- inci209 %>% 
+  filter(
+    FOD_FIRE_NUM == 1 | is.na(FOD_FIRE_NUM),
+    LRGST_MTBS_FIRE_INFO != "") %>% 
+  #7201 events
+  # Now join to MTBS by unique identifier
+  as_tibble() %>%
+  inner_join(
+    mtbs%>%as_tibble(), .,
+    by="MTBS_ID") %>%
+  st_as_sf() %>%
+  #6775 events
+  # Use MTBS perims to find overlapping FIRED polygons
+  st_join(
+    events, ., join=st_intersects,
+    largest=FALSE, left=FALSE) %>%
+  # Call the compare_attr() function to check for matches
+  compare_attr(.) %>%
+  distinct(.keep_all = TRUE) # Keep only distinct records (remove exact duplicates)
+
+###Check for duplicate records by both INCIDENT_ID and id
+# INCIDENT_ID (209s)
+dup <- inci.mtbs.fired %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim() # Returns number of duplicates by column rows
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  # First try to find the closest match
+  inci.mtbs.fired <- inci.mtbs.fired %>% group_by(INCIDENT_ID) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate 209 INCIDENT_ID ...")
+}
+# id (FIRED)
+dup <- inci.mtbs.fired %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  inci.mtbs.fired <- inci.mtbs.fired %>% group_by(id) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate FIRED id ...")
+}
+
+# Final duplicate check - remove any records that still have duplicates
+# INCIDENT_ID (209s)
+dup <- inci.mtbs.fired %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.mtbs.fired <- rm_duplicates(inci.mtbs.fired, id="INCIDENT_ID")
+}
+# id (FIRED)
+dup <- inci.mtbs.fired %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.mtbs.fired <- rm_duplicates(inci.mtbs.fired, id="id")
+}
+```
+
+For those incident reports which we could not find a join using the MTBS perimeter, we can now try a spatial-temporal buffer. This step involves creating search distances (1-15000 meters) and finding overlapping FIRED perimeters. We can then subset or filter events by matching attributes. We buffer the ignition time by 14 days to account for differences between human-recording data and remote sensing-derived ignition dates. We also return matches where the size of the fire is under 50% difference. This also accounts for differences in reported acreage and what is mapped by FIRED.
+
+```{r}
+###############Now work with remaining events using spatial buffer
+###Filter out joined data in incident reports
+inci209.sub <- inci209 %>% 
+  filter(
+    !INCIDENT_ID %in% inci.mtbs.fired$INCIDENT_ID)
+###Filter out FIRED events that are joined
+events.sub <- events %>% 
+  filter(
+    !id %in% inci.mtbs.fired$id)
+
+###Generate spatial points data frame using Point of Origin coordinates
+###FOD coordinates are more accurate (according to expert opinion)
+inci.fired <- inci209.sub %>% 
+  # Fill missingness with FOD coords
+  mutate(
+    LATITUDE = if_else(
+      is.na(LRGST_FIRE_LATITUDE), POO_LATITUDE, LRGST_FIRE_LATITUDE),
+    LONGITUDE = if_else(
+      is.na(LRGST_FIRE_LONGITUDE), POO_LONGITUDE, LRGST_FIRE_LONGITUDE)) %>% 
+  # Remove records with no location information
+  filter(!is.na(LATITUDE)) %>%
+  # Convert to spatial object 
+  st_as_sf(
+    ., coords=c("LONGITUDE", "LATITUDE"), na.fail=TRUE) %>% 
+  st_set_crs(
+    st_crs(4326)) %>%
+  # Retain the Lat/Lon information
+  mutate(
+    LONGITUDE = unlist(map(.$geometry,1)),
+    LATITUDE = unlist(map(.$geometry,2))) %>% 
+  # Set CRS to FIRED polygons
+  st_transform(crs=st_crs(events)) %>%
+  # Run the variable buffer function and find overlapping events
+  varbuff_join(., events.sub)
+
+###Check for duplicate records by both INCIDENT_ID and id
+# INCIDENT_ID (209s)
+dup <- inci.fired %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim() # Returns number of duplicates by column rows
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  # First try to find the closest match
+  inci.fired <- inci.fired %>% group_by(INCIDENT_ID) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate 209 INCIDENT_ID ...")
+}
+# id (FIRED)
+dup <- inci.fired %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  inci.fired <- inci.fired %>% group_by(id) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate FIRED id ...")
+}
+
+# Final duplicate check - remove any records that still have duplicates
+# INCIDENT_ID (209s)
+dup <- inci.fired %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.fired <- rm_duplicates(inci.fired, id="INCIDENT_ID")
+}
+# id (FIRED)
+dup <- inci.mtbs.fired %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.fired <- rm_duplicates(inci.fired, id="id")
+}
+```
+
+We can take a look at the summary of the joined data that we have so far and check for duplicates.
+
+```{r}
+###Merge the two joined data sets
+join <- bind_rows(inci.fired, inci.mtbs.fired)
+###Check for duplicate records
+join %>% group_by(INCIDENT_ID) %>% filter(n()>1) %>% dim()
+# single_mtbs_jfc %>% group_by(INCIDENT_ID) %>% filter(n()>1) %>% view()
+join %>% group_by(id) %>% filter(n()>1) %>% dim()
+```
+
+Let's check for 209 records that do have MTBS information but did not get joined in the above workflow. We will try to join them by the fire name, if possible, and then merge.
+
+```{r}
+###Looking at the table indicates that some fires with MTBS information might be missing
+###We can try to isolate MTBS IDs that are actually the fire name
+###Then, we can try to join based on fire name
+###Filter out joined data in incident reports
+inci209.sub <- inci209 %>% 
+  filter(
+    !INCIDENT_ID %in% join$INCIDENT_ID)
+###Filter out FIRED events that are joined
+events.sub <- events %>% 
+  filter(
+    !id %in% join$id)
+###Filter MTBS
+mtbs.sub <- mtbs %>% 
+  filter(
+    MTBS_ID %in% join$MTBS_ID) %>%
+  dplyr::select(-MTBS_ID)
+
+# Now try the join by name
+inci.mtbs.name <- inci209.sub %>%
+  mutate(
+    MTBS_FIRE_NAME = if_else(
+      MTBS_FIRE_NAME == "UNKNOWN", INCIDENT_NAME, MTBS_FIRE_NAME),
+    MTBS_FIRE_NAME = if_else(
+      MTBS_FIRE_NAME == "", INCIDENT_NAME, MTBS_FIRE_NAME)) %>%
+  inner_join(
+    mtbs.sub, ., by="MTBS_FIRE_NAME") %>%
+  # Now spatial overlap again with FIRED
+  st_join(
+    events.sub, ., largest=FALSE, left=FALSE) %>%
+  # And compare the attributes
+  compare_attr(.)
+
+
+############################################################
+###Check for duplicate records by both INCIDENT_ID and id
+# INCIDENT_ID (209s)
+dup <- inci.mtbs.name %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim() # Returns number of duplicates by column rows
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  # First try to find the closest match
+  inci.mtbs.name <- inci.mtbs.name %>% group_by(INCIDENT_ID) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate 209 INCIDENT_ID ...")
+}
+# id (FIRED)
+dup <- inci.mtbs.name %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  inci.mtbs.name <- inci.mtbs.name %>% group_by(id) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate FIRED id ...")
+}
+
+# Final duplicate check - remove any records that still have duplicates
+# INCIDENT_ID (209s)
+dup <- inci.mtbs.name %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.mtbs.name <- rm_duplicates(inci.mtbs.name, id="INCIDENT_ID")
+}
+# id (FIRED)
+dup <- inci.mtbs.name %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.mtbs.name <- rm_duplicates(inci.mtbs.name, id="id")
+}
+
+##Bind rows back to first join
+join.final <- bind_rows(join, inci.mtbs.name)
+```
+
+
+```{r}
+###Get some statistics for the join so far
+paste(round(sum(join.final$STR_DAMAGED_TOTAL)/sum(inci209$STR_DAMAGED_TOTAL)*100,3),
+      "% of all structures damaged ...", sep="")
+paste(round(sum(join.final$STR_DAMAGED_RES_TOTAL)/sum(inci209$STR_DAMAGED_RES_TOTAL)*100,3),
+      "% of residential structures damaged ...", sep="")
+print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+
+paste(round(sum(join.final$STR_DESTROYED_TOTAL)/sum(inci209$STR_DESTROYED_TOTAL)*100,3),
+      "% of all structures destroyed ...", sep="")
+paste(round(sum(join.final$STR_DESTROYED_RES_TOTAL)/sum(inci209$STR_DESTROYED_RES_TOTAL)*100,3),
+      "% of residential structures destroyed ...", sep="")
+print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+###Need to handle the NAs to compare threatened and cost
+t1 <- join.final %>% filter(!is.na(STR_THREATENED_RES_MAX))
+t2 <- inci209 %>% filter(!is.na(STR_THREATENED_RES_MAX))
+c1 <- join.final %>% filter(!is.na(PROJECTED_FINAL_IM_COST))
+c2 <- inci209 %>% filter(PROJECTED_FINAL_IM_COST != "")
+
+paste(round(sum(t1$STR_THREATENED_MAX)/sum(t2$STR_THREATENED_MAX)*100,3),
+      "% of all structures threatened ...", sep="")
+paste(round(sum(t1$STR_THREATENED_RES_MAX)/sum(t2$STR_THREATENED_RES_MAX)*100,3),
+      "% of residential structures threatened ...", sep="")
+print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+paste(round(sum(c1$PROJECTED_FINAL_IM_COST)/sum(c2$PROJECTED_FINAL_IM_COST)*100,3),
+      "% of suppression expenditures ...", sep="")
+```
+
+Doing a little bit of digging into the incidents which did not get a join, particularly those most significant to society (from a structure loss perspective). 
+
+```{r}
+###Isolate the incident reports that do not have a joined perimeter
+no.join <- inci209 %>% 
+  filter(
+    !INCIDENT_ID %in% join.final$INCIDENT_ID)
+
+###Get some summaries of the no join
+paste("Wildfire acres in un-joined incidents: ", sum(no.join$FINAL_ACRES), sep="")
+print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+paste("Destroyed residential structures in un-joined incidents: ", sum(no.join$STR_DESTROYED_RES_TOTAL), sep="")
+print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+
+# Export the top 100 most destructive fires for exploration on why they did not get join
+top_n(no.join, 100, STR_DESTROYED_RES_TOTAL) %>%
+  write.csv(., paste(data, "thesis/data/data_mod/joins/y2000to2018/inci209_incidents_noJoin_top100.csv", sep=""))
+
+# Export the joined dataset
+st_write(obj = join.final, dsn = paste(
+  data, "thesis/data/data_mod/joins/y2000to2018/fired_events_w209_to2018.gpkg", sep=""
+), driver="gpkg")
+
+write.csv(join.final, paste(
+  data, "thesis/data/data_mod/joins/y2000to2018/fired_events_w209_to2018.csv", sep=""))
+```
+
+```{r}
+any(duplicated(toupper(names(join.final))))
+which(duplicated(toupper(names(join.final))))
+names(join.final)[116]
+```
+
+```{r}
+# Bring in the top 100 most destructive fires and re-try
+noJoin <- read.csv(paste(data, "FIRED/data/update0621/sit209_join/inci209_incidents_noJoin_top100.csv", sep=""))
+```
+
+FINISH
+#####################
+
+## Update for 2019-2020 join (without FOD or MTBS link)
+
+```{r}
+# Filter events to 2019 to 2020
+events.sub <- events %>% filter(
+  ig_year >= 2019
+)
+###Generate spatial points data frame using Point of Origin coordinates
+###FOD coordinates are more accurate (according to expert opinion)
+inci.fired.addin <- inci209_addin %>% 
+  # Remove records with no location information
+  filter(!is.na(POO_LATITUDE)) %>%
+  # Convert to spatial object 
+  st_as_sf(
+    ., coords=c("POO_LONGITUDE", "POO_LATITUDE"), na.fail=TRUE) %>% 
+  st_set_crs(
+    st_crs(4326)) %>%
+  # Retain the Lat/Lon information
+  mutate(
+    LONGITUDE = unlist(map(.$geometry,1)),
+    LATITUDE = unlist(map(.$geometry,2))) %>% 
+  # Set CRS to FIRED polygons
+  st_transform(crs=st_crs(events)) %>%
+  # Run the variable buffer function and find overlapping events
+  varbuff_join(., events.sub)
+
+###Check for duplicate records by both INCIDENT_ID and id
+# INCIDENT_ID (209s)
+dup <- inci.fired.addin %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim() # Returns number of duplicates by column rows
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  # First try to find the closest match
+  inci.fired.addin <- inci.fired.addin %>% group_by(INCIDENT_ID) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate 209 INCIDENT_ID ...")
+}
+# id (FIRED)
+dup <- inci.fired.addin %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print(paste(toString(dup[1]), "duplicate INCIDENT_IDs found ... fixing ...", sep=" "))
+  inci.fired.addin <- inci.fired.addin %>% group_by(id) %>%
+    filter(daydiff == min(daydiff),
+           lowdiff == min(lowdiff),
+           hulldiff == min(hulldiff)) %>% 
+    ungroup() %>% 
+    distinct(.keep_all = TRUE)
+} else {
+  print("No duplicate FIRED id ...")
+}
+
+# Final duplicate check - remove any records that still have duplicates
+# INCIDENT_ID (209s)
+dup <- inci.fired.addin %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>% 
+  dim()
+if(dup[1] > 0){
+  print("Removing final duplicate records ...")
+  inci.fired.addin <- rm_duplicates(inci.fired.addin, id="INCIDENT_ID")
+}
+# Write to file
+# st_write(
+#   inci.fired.addin, "C:/Users/mccoo/OneDrive/mcook/thesis/data/data_mod/joins/y2019to2020/fired_events_w209_2019to2020.gpkg")
+```
+
+```{r}
+# Export the un0joined addin data for exploration
+addin_njoin <- inci209_addin %>% filter(!INCIDENT_ID %in% inci.fired.addin$INCIDENT_ID) %>% 
+  # Remove records with no location information
+  filter(!is.na(POO_LATITUDE)) %>%
+  # Convert to spatial object 
+  st_as_sf(
+    ., coords=c("POO_LONGITUDE", "POO_LATITUDE"), na.fail=TRUE) %>% 
+  st_set_crs(
+    st_crs(4326)) %>%
+  # Retain the Lat/Lon information
+  mutate(
+    LONGITUDE = unlist(map(.$geometry,1)),
+    LATITUDE = unlist(map(.$geometry,2))) %>% 
+  # Set CRS to FIRED polygons
+  st_transform(crs=st_crs(events))
+# st_write(addin_njoin, "C:/Users/mccoo/OneDrive/mcook/thesis/data/data_mod/joins/y2019to2020/no_join_y2019to2020.gpkg")
+```
+
+# Join the two time periods for the final database
+# Clean up the variable names
+
+```{r}
+inci.fired.addin <- inci.fired.addin %>% mutate(
+  COMPLEX = as.character(COMPLEX),
+  EVACUATION_REPORTED = as.character(EVACUATION_REPORTED)
+)
+final <- bind_rows(join.final, inci.fired.addin)
+# st_write(final, "C:/Users/mccoo/OneDrive/mcook/thesis/data/data_mod/joins/y2000to2020/fired_events_w209_2000to2020.gpkg")
+```
+
+
+
+```{r}
+cleaned <- final %>%
+   dplyr::select(id, ig_date, ig_day, ig_year, last_date, event_dur, tot_ar_km2,
+                 fsr_km2_dy, mx_grw_km2, mx_grw_dte, lc_mode, lc_name, eco_mode, eco_name,
+                 ig_utm_x, ig_utm_y, bupr_sum, bupr_sum1k, INCIDENT_ID, INCIDENT_NAME,
+                 FINAL_KM2, CAUSE, DISCOVERY_DATE, FATALITIES, PROJECTED_FINAL_IM_COST,
+                 STR_DAMAGED_TOTAL, STR_DAMAGED_RES_TOTAL, STR_DAMAGED_COMM_TOTAL,
+                 STR_DESTROYED_TOTAL, STR_DESTROYED_RES_TOTAL, STR_DESTROYED_COMM_TOTAL,
+                 STR_THREATENED_MAX, STR_THREATENED_RES_MAX, STR_THREATENED_COMM_MAX,
+                 FINAL_REPORT_DATE, INC_MGMT_NUM_SITREPS, EVACUATION_REPORTED, TOTAL_AERIAL_SUM,
+                 TOTAL_PERSONNEL_SUM, WF_PEAK_AERIAL, WF_PEAK_AERIAL_DATE, WF_PEAK_PERSONNEL,
+                 WF_PEAK_PERSONNEL_DATE, WF_CESSATION_DATE, WF_MAX_FSR, WF_MAX_GROWTH_DATE,
+                 WF_GROWTH_DURATION, FOD_FIRE_NUM, FOD_CAUSE_NUM, LRGST_FOD_ID,
+                 LRGST_MTBS_FIRE_INFO, LONGITUDE, LATITUDE) %>%
+   rename_all(., .funs = tolower) %>%
+   rename(
+      inci_id = incident_id, inci_name = incident_name, disc_date = discovery_date,
+      proj_cost = projected_final_im_cost, st_dmg_tot = str_damaged_total, 
+      st_dmg_res = str_damaged_res_total, st_dmg_com = str_damaged_comm_total,
+      st_des_tot = str_destroyed_total, st_des_res = str_destroyed_res_total,
+      st_des_com = str_destroyed_comm_total, st_thr_tot = str_threatened_max,
+      st_thr_res = str_threatened_res_max, st_thr_com = str_threatened_comm_max,
+      fin_rprt = final_report_date, num_sitrep = inc_mgmt_num_sitreps, pk_aerial = wf_peak_aerial,
+      evac_rpt = evacuation_reported, tot_aerial = total_aerial_sum, tot_person = total_personnel_sum,
+      pk_person = wf_peak_personnel, pk_per_dt = wf_peak_personnel_date, pk_aer_dt = wf_peak_aerial_date,
+      cess_date = wf_cessation_date, wf_mx_gr_d = wf_max_growth_date, wf_gr_dur = wf_growth_duration,
+      fod_fr_num = fod_fire_num, fod_cs_num = fod_cause_num, lgst_fod = lrgst_fod_id, 
+      mtbs_info = lrgst_mtbs_fire_info)
+```

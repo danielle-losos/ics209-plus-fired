@@ -37,3 +37,22 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# ArcGIS and QGIS mapping projects
+maps/
+
+# Scratch folder
+scratch/
+
+# Documents folder
+docs/
+
+# Data archive folder
+data/archive/
+
+# FAMWEB data
+data/tabular/raw/famweb/
+
+# IPYNB checkpoints
+code/Python/.ipynb_checkpoints
+
