@@ -1,2 +1,2 @@
-# ics-fired
-Harmonization of the FIre Events Delineation (FIRED) fire event perimeters with the ICS-209-PLUS incident command reports. 
+# ICS-209-PLUS Exploration
+Exploration and analysis of the ICS-209-PLUS (St. Denis et al. 2020 updated) with emphasis on western U.S. wildfire incidents and residential structure loss. Including workflow for linking the ICS-209-PLUS and the FIRe Events Delineation (FIRED) event database. 
