@@ -6,17 +6,13 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE, warning=FALSE}
-rm(list = ls())
-
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/mccoo/OneDrive/mcook/')
-
-source("C:/Users/mccoo/OneDrive/mcook/ics209/code/R/funs.R")
+source("setup.R")
 ```
 
 ```{r}
 # Grab a glimpse of the data
-glimpse(ics)
+glimpse(ics.west)
 ```
 
 Plot cumulative structures destroyed from ICS-209-PLUS.
