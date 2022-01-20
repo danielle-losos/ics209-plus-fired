@@ -5,42 +5,45 @@ library(lubridate)
 library(scales)
 library(ggpubr)
 library(grid)
-################################
-# Environment variables and data
+#################################
+## Environment variables and data
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 setwd("../../")
 
-# Bring in some boundary data
+## Bring in some boundary data
 states <- st_read("../data/boundaries/political/TIGER/tl19_us_states_conus.gpkg")
-states.sub <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT")
-states.sub <- states %>% filter(STUSPS %in% states.sub)
+west <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT")
+states.west <- states %>% filter(STUSPS %in% west)
 counties <- st_read("../data/boundaries/political/TIGER/tl19_us_counties_west.gpkg")
 ecoregions <- st_read("../data/boundaries/ecological/ecoregion/na_cec_eco_l3_conus.gpkg")
 gaccs <- st_read("../data/boundaries/political/GACC/natl_gacc_albers_conus.gpkg")
 
-# Load the ICS-209-PLUS spatial table for CONUS (QC / edited by MC 01-2022)
-ics.conus <- st_read("data/spatial/mod/wf-incidents/ics209plus_wf_incidents_spatial_conus_1999to2020_qc.gpkg") 
-# West-Wide ICS-209-PLUS spatial (QC / edited by MC 01-2022)
+## Load the ICS-209-PLUS spatial table for CONUS (QC / edited by MC 01-2022)
+ics.conus <- st_read("data/spatial/mod/wf-incidents/ics209plus_wf_incidents_spatial_conus_1999to2020_qc.gpkg")
+# og.conus <- st_read("data/spatial/raw/wf-incidents/ics209plus_wf_incidents_spatial_conus_1999to2020.gpkg")
+## West-Wide ICS-209-PLUS spatial (QC / edited by MC 01-2022)
 ics.west <- st_read("data/spatial/mod/wf-incidents/ics209plus_wf_incidents_spatial_west_1999to2020_qc.gpkg")
-og <- st_read("data/spatial/raw/wf-incidents/ics209plus_wf_incidents_spatial_west_1999to2020.gpkg")
-# Fired <- 
-fired <- st_read("../fired/data/fired_events_conus_to2021091.gpkg")
-# # East
-# states.east <- st_read("../data/boundaries/political/TIGER/tl19_us_states_east.gpkg")
-# fired.east <- st_join(fired, states.east%>%st_transform(st_crs(fired)), join=st_intersection, largest=TRUE)
-# 
-#   
-#   
-# # Load the FIRED database (updated manually by MC, 01-2022)
-# fired.west <- st_read("../fired/data/fired_events_west_to2020.gpkg") %>% st_transform(st_crs(ics))
-# 
-# # # Load the previously joined database
-# # ics.fired <- st_read("ics209-plus-fired/data/spatial/mod/ics-fired/ics-fired_conus_2001to2020.gpkg")
-# 
-# 
-# 
-# 
-# # convex hull area
+# og.west <- st_read("data/spatial/raw/wf-incidents/ics209plus_wf_incidents_spatial_west_1999to2020.gpkg")
+
+## FIRED Events and updated QC for some 2020 complex fires (MC 01-2021).
+fired.conus <- st_read("../fired/data/events/mod/fired_events_conus_to2020_qc.gpkg") %>%
+ st_transform(st_crs(ics.conus))
+## Load the FIRED database (updated manually by MC, 01-2022)
+fired.west <- st_read("../fired/data/events/mod/fired_events_west_to2020_qc.gpkg") %>% 
+ st_transform(st_crs(ics.west))
+
+## Load the previously joined database
+ics.fired <- st_read("data/spatial/mod/ics-fired/ics-fired_conus_2001to2020.gpkg")
+
+
+
+
+
+
+
+
+
+# convex hull area
 # hull <- read.csv("fired/data/fired_events_hull.csv") %>%
 #   mutate(hull_km2 = area*1e-6) %>%
 #   dplyr::select(id, hull_km2)
