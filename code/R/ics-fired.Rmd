@@ -13,7 +13,7 @@ source("setup.R")
 
 ```{r}
 # Grab a glimpse of the data
-glimpse(ics.west)
+glimpse(ics.conus)
 ```
 
 In CONUS, there were 61,097 homes destroyed across 2,360 wildfire incidents representing 7.19% of total wildfire incidents during this time period (1999-2020). In the western U.S., 52,119 homes were lost to wildfire in just 1,007 individual incidents. This represents only 6.7% of west-wide incidents. Wildfire in the west accounts for 85.3% of home loss (1999-2020) across just 3.1% of wildfire incidents.
@@ -34,28 +34,28 @@ Plot destruction by state.
 
 ```{r fig.width=4, fig.height=2.5}
 # Group summary by state
-ics.conus.grp <- ics.conus %>% 
+state.sum <- ics.conus %>% as_tibble() %>%
   filter(STR_DESTROYED_RES_TOTAL > 0) %>%
   group_by(STUSPS) %>%
-  summarize(str_des_res = sum(STR_DESTROYED_RES_TOTAL))
-# Top 15
-top20 <-  ics.conus.grp %>% slice_max(str_des_res, n=10)
-# Plot
-ggplot(data = ics.conus.grp %>% filter(STUSPS %in% top20$STUSPS), 
-       aes(x=reorder(STUSPS, -str_des_res), y=str_des_res)) +
-  geom_bar(stat='identity') +
-  theme_minimal()
-rm(ics.conus.grp)
-rm(top20)
+  summarize(str_des_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
+  inner_join(states%>%as_tibble(), ., by="STUSPS") %>%
+  st_as_sf() 
+  # Plot
+ggplot() +
+  geom_sf(data=state.sum, aes(fill=str_des_res)) +
+  scale_fill_viridis_c(option="magma", trans="log10") +
+  guides(fill="none") +
+  theme_void()
+rm(state.sum)
 ```
 
 Texas and Oklahoma account for a large percentage of home loss. Tennessee is also in the top 15 most destructive states. By including TX and OK in the analysis we can capture 93% of all wildfire-related home loss and 91% of total burned area from the incident command reports. 
 
 ```{r}
-states.sub <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT", "TX", "OK")
-ics.west.plus <- ics.conus %>% filter(STUSPS %in% states.sub)
+west.plus <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT", "TX", "OK")
+ics.west.plus <- ics.conus %>% filter(STUSPS %in% west.plus)
 ## Subset FIRED as well
-fired.west.plus <- fired.conus %>% filter(STUSPS %in% states.sub)
+fired.west.plus <- fired.conus %>% filter(STUSPS %in% west.plus)
 ## Homes destroyed
 print("Homes destroyed: ...")
 sum(ics.west$STR_DESTROYED_RES_TOTAL) / sum(ics.conus$STR_DESTROYED_RES_TOTAL) * 100
@@ -103,6 +103,8 @@ map1
 ggsave(map1, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_WestPlus.png", sep=""), 
        width=5, height=5, dpi = 350) # adjust dpi accordingly
 ```
+
+Homes destroyed by incident.
 
 ```{r fig.width=4, fig.height=2.5, warning=F}
 ## reorder factors
@@ -565,5 +567,193 @@ map3 <- ggplot() +
 map3
 ggsave(map3, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_CONUS_Joined.png", sep=""), 
        width=7.5, height=5, dpi = 350) # adjust dpi accordingly
+```
+
+Now join the remaining incidents (CONUS East).
+
+```{r}
+# Isolate eastern wildfires
+ics.east <- ics.conus %>% filter(!STUSPS %in% west.plus)
+fired.east <- fired.conus %>% filter(!STUSPS %in% west.plus)
+```
+
+By spatial buffer overlap.
+
+```{r warning=F}
+## Remove records reporting 0 acres (likely erroneous)
+ics.east <- ics.east %>% 
+  filter(FINAL_ACRES != 0,
+         FINAL_KM2 != 0,
+         START_YEAR >= 2001,
+         !is.na(DISCOVERY_DATE))
+## Buffer incident points by generous 50km
+ics.buffer <- st_buffer(ics.east, 50000)
+## Join to any overlapping FIRED perimeters
+buffer.join <- st_join(fired.east, ics.buffer, join=st_intersects)
+```
+
+A 50km buffer join to all events yields over two million records. Start filtering them down by attributes.
+
+Ignition date filters ...
+
+```{r}
+## By DOY
+doy.filter <- buffer.join %>% 
+  mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
+  filter(START_YEAR == ig_year & doy_diff <= 20)
+dim(doy.filter)[1]
+```
+
+Fire size filters ...
+
+```{r}
+area.filter <- doy.filter %>% 
+  mutate(ar_abs_dif = abs(tot_ar_km2 - FINAL_KM2),
+         ar_chg_dif = abs((tot_ar_km2 - FINAL_KM2)/FINAL_KM2) * 100) %>%
+  group_by(INCIDENT_ID) %>%
+  filter(ar_chg_dif == min(ar_chg_dif),
+         ar_abs_dif == min(ar_abs_dif)) %>%
+  ungroup() %>%
+  group_by(id) %>%
+  filter(ar_chg_dif == min(ar_chg_dif),
+         ar_abs_dif == min(ar_abs_dif)) %>%
+  ungroup()
+dim(area.filter)[1]
+```
+
+Now double check on how many duplicates we still have.
+
+```{r}
+dim(area.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(area.filter %>% group_by(id) %>% filter(n()>1))[1]
+## Check for just destructive events
+print("For destructive incidents (Homes Destroyed > 0): ...")
+dim(area.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
+dim(area.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(id)%>%filter(n()>1))[1]
+## And by fire size
+print("For burned area (acres > 100): ...")
+dim(area.filter%>%filter(FINAL_ACRES>100)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
+dim(area.filter%>%filter(FINAL_ACRES>100)%>%group_by(id)%>%filter(n()>1))[1]
+```
+
+For the most part, the duplicates represent smaller, less destructive fires. we can try to filter again by the minimum date difference.
+
+```{r}
+min.filter <- area.filter %>%
+  group_by(INCIDENT_ID) %>%
+  filter(doy_diff == min(doy_diff)) %>%
+  ungroup() %>%
+  group_by(id) %>%
+  filter(doy_diff == min(doy_diff)) %>%
+  ungroup()
+dim(min.filter)[1]
+```
+
+Again, double check on how many duplicates we still have.
+
+```{r}
+dim(min.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(min.filter%>% group_by(id) %>% filter(n()>1))[1]
+## Check for just destructive events
+print("For destructive incidents (Homes Destroyed > 0): ...")
+dim(min.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
+dim(min.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(id)%>%filter(n()>1))[1]
+## And by fire size
+print("For burned area (acres > 100): ...")
+dim(min.filter%>%filter(FINAL_ACRES>100)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
+dim(min.filter%>%filter(FINAL_ACRES>100)%>%group_by(id)%>%filter(n()>1))[1]
+```
+
+Try to eliminate any exact duplicate rows.
+
+```{r}
+min.filter <- min.filter %>% dplyr::select(-c(fid_, STUSPS.x, X, X.1)) %>%
+  distinct(.keep_all = T)
+dim(min.filter)[1]
+sum(min.filter$STR_DESTROYED_RES_TOTAL) / sum(ics.east$STR_DESTROYED_RES_TOTAL) * 100
+```
+
+Isolate duplicate records, export for inspection.
+
+```{r}
+d <- min.filter %>% 
+  group_by(INCIDENT_ID) %>% 
+  filter(n()>1) %>%
+  ungroup()
+dd <- min.filter %>% 
+  group_by(id) %>% 
+  filter(n()>1) %>%
+  ungroup()
+```
+
+Isolate non duplicates.
+
+```{r}
+min.filter_ <- min.filter %>% 
+  filter(!INCIDENT_ID %in% d$INCIDENT_ID,
+         !id %in% dd$id)
+dim(min.filter_ %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(min.filter_ %>% group_by(id) %>% filter(n()>1))[1]
+sum(min.filter_$STR_DESTROYED_RES_TOTAL) / sum(ics.east$STR_DESTROYED_RES_TOTAL) * 100
+```
+
+Calculate nearest neighbor for incidents with duplicates.
+
+```{r}
+## Calculate centroid for FIRED event
+fired.sub <- fired.east %>% filter(!id %in% min.filter_$id)
+centroid <- st_centroid(fired.sub)
+## Get the incidents that have duplicates
+ics.sub <- ics.east %>% filter(!INCIDENT_ID %in% min.filter_$INCIDENT_ID)
+## Try a join
+t <- st_join(ics.sub, centroid, join = nngeo::st_nn, k = 1, maxdist = 25000)
+## Filter down
+tt <- t %>%
+  mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
+  filter(START_YEAR == ig_year & doy_diff <= 20) %>% 
+  mutate(ar_abs_dif = abs(tot_ar_km2 - FINAL_KM2),
+         ar_chg_dif = abs((tot_ar_km2 - FINAL_KM2)/FINAL_KM2) * 100) %>%
+  group_by(INCIDENT_ID) %>%
+  filter(ar_chg_dif == min(ar_chg_dif),
+         ar_abs_dif == min(ar_abs_dif)) %>%
+  ungroup() %>%
+  group_by(id) %>%
+  filter(ar_chg_dif == min(ar_chg_dif),
+         ar_abs_dif == min(ar_abs_dif)) %>%
+  ungroup() %>%
+  group_by(INCIDENT_ID) %>%
+  filter(doy_diff == min(doy_diff)) %>%
+  ungroup() %>%
+  group_by(id) %>%
+  filter(doy_diff == min(doy_diff)) %>%
+  ungroup()
+## At this point, remove all duplicates
+tt <- tt %>% distinct(id, .keep_all = TRUE)
+## Double check duplicates
+dim(tt %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(tt %>% group_by(id) %>% filter(n()>1))[1]
+```
+
+```{r}
+## Now grab FIRED perimeter,
+tt.fired.df <- inner_join(fired.conus%>%as_tibble(), tt, by="id", left=F) %>% st_as_sf()
+# Tidy it
+tt.fired.df <- tt.fired.df %>% select(-contains(".x"))
+## Join back to df
+dim(min.filter_%>%filter(INCIDENT_ID %in% tt$INCIDENT_ID))
+final.join <- bind_rows(min.filter_, tt.fired.df) %>%
+  select(-c(X, X.1, doy_diff, ar_abs_dif, ar_chg_dif, bupr_sum, bupr_sum1k, geom.x),
+         -contains(".y"))
+  
+## Final test of duplicates
+dim(final.join %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(final.join %>% group_by(id) %>% filter(n()>1))[1]
+```
+
+Export.
+
+```{r}
+st_write(final.join, "../../data/spatial/mod/ics-fired/ics-fired_east_2001to2020.gpkg", 
+         delete_dsn = TRUE)
 ```
 
