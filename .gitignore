@@ -55,3 +55,6 @@ data/tabular/raw/famweb/
 
 # IPYNB checkpoints
 code/Python/.ipynb_checkpoints
+
+# R code to ignore
+code/R/scratch.R
