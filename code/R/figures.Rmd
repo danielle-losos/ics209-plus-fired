@@ -1,7 +1,6 @@
 ---
 title: "figures"
 author: "Maxwell C. Cook"
-date: "1/6/2022"
 output: html_document
 ---
 
@@ -13,6 +12,46 @@ source("setup.R")
 ```{r}
 # Grab a glimpse of the data
 glimpse(ics.conus)
+```
+
+Filter out incidents with 0 acres or with missing temporal information.
+
+```{r}
+# Remove records reporting 0 acres (likely erroneous)
+ics.conus <- ics.conus %>% 
+  filter(FINAL_ACRES != 0, FINAL_KM2 != 0,
+         !is.na(DISCOVERY_DATE))
+```
+
+Print some summary statistics for CONUS and West+.
+
+```{r}
+# Burned area
+print(paste("Burned Area (acres): ", format(round(as.numeric(sum(ics.conus$FINAL_ACRES)), 1), 
+                                            nsmall=1, big.mark=","), sep=""))
+# Homes
+print(paste("Homes Destroyed: ", round(sum(ics.conus$STR_DESTROYED_RES_TOTAL), 0), sep=""))
+# Cost
+tmp <- ics.conus %>% filter(!is.na(PROJECTED_FINAL_IM_COST))
+print(paste("Projected Suppression Costs: ", format(round(as.numeric(sum(tmp$PROJECTED_FINAL_IM_COST)), 1), 
+                                            nsmall=1, big.mark=","), sep=""))
+## For west+
+print("~~~~~~~~West-Wide~~~~~~~~")
+west.plus <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT", "TX", "OK")
+ics.west.plus <- ics.conus %>% filter(STUSPS %in% west.plus)
+# Burned area
+print(paste("Burned Area (acres): ", format(round(as.numeric(sum(ics.west.plus$FINAL_ACRES)), 1), 
+                                            nsmall=1, big.mark=","), sep=""))
+# Homes
+print(paste("Homes Destroyed: ", round(sum(ics.west.plus$STR_DESTROYED_RES_TOTAL), 0), sep=""))
+# Cost
+tmp2 <- ics.west.plus %>% filter(!is.na(PROJECTED_FINAL_IM_COST))
+print(paste("Projected Suppression Costs: ", format(round(as.numeric(sum(tmp2$PROJECTED_FINAL_IM_COST)), 1), 
+                                            nsmall=1, big.mark=","), sep=""))
+## West-wide percentages
+sum(tmp2$PROJECTED_FINAL_IM_COST) / sum(tmp$PROJECTED_FINAL_IM_COST) * 100
+rm(tmp)
+rm(tmp2)
 ```
 
 Plot burned area reported by the ICS-209-PLUS West-wide and CONUS.

@@ -102,6 +102,7 @@ map1 <- ggplot() +
 map1
 ggsave(map1, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_WestPlus.png", sep=""), 
        width=5, height=5, dpi = 350) # adjust dpi accordingly
+rm(map1)
 ```
 
 Homes destroyed by incident.
@@ -113,7 +114,7 @@ ics.west.plus$INCIDENT_NAME <-
 ics.west.plus$INCIDENT_NAME <- 
   factor(ics.west.plus$INCIDENT_NAME, levels=rev(levels(ics.west.plus$INCIDENT_NAME)))
 # Grab the top 15
-top10 <- ics.west.plus %>% slice_max(STR_DESTROYED_RES_TOTAL, n=10)
+top5 <- ics.west.plus %>% slice_max(STR_DESTROYED_RES_TOTAL, n=5)
 # Plot and label
 f1 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL, 
                                      group=factor(INCIDENT_NAME), 
@@ -122,11 +123,11 @@ f1 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL,
   scale_fill_viridis_c(option="inferno", trans="log10") +
   labs(
     x="", y="Homes Destroyed\n", fill="") +
-    # title="Homes destroyed by Western wildfires (1999-2020)\n",
-    # caption="Maxwell C. Cook, PhD Student, Department of Geography,
-    # University of Colorado, Boulder\nData source: St. Denis et al., 2020 (updated)") +
-  # ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top10$INCIDENT_ID), 
-  #                          aes(label=INCIDENT_NAME), position=position_jitterdodge(0.5), size = 2) +
+  # title="Homes destroyed by Western wildfires (1999-2020)\n",
+  # caption="Maxwell C. Cook, PhD Student, Department of Geography,
+  # University of Colorado, Boulder\nData source: St. Denis et al., 2020 (updated)") +
+  # ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top5$INCIDENT_ID),
+  #                          aes(label=INCIDENT_NAME), position=position_dodge(0.5), size = 2) +
   theme_minimal() +
   theme(plot.title = element_text(size = 9),
         plot.subtitle = element_text(size=7),
@@ -139,7 +140,8 @@ f1 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL,
 f1
 ggsave(f1, file = "../../figs/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png",
        width=4, height=2.5, dpi = 300) # adjust dpi accordingly
-rm(top10)
+rm(top5)
+rm(f1)
 ```
 
 Burned area (option 1).
@@ -170,6 +172,7 @@ f2 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=FINAL_ACRES,
 f2
 ggsave(f2, file = "../../figs/Westwide-PLUS_BurnedArea_byIncident_1999to2020.png",
        width=4, height=2.5, dpi = 300) # adjust dpi accordingly
+rm(f2)
 ```
 
 Burned area (Option 2).
@@ -200,7 +203,10 @@ f3 <- ics.west.plus %>% group_by(START_YEAR) %>%
 f3
 ggsave(f3, file = "../../figs/Westwide-PLUS_BurnedArea_1999to2020.png",
        width=4, height=2.5, dpi = 300) # adjust dpi accordingly
+rm(f3)
 ```
+
+Arrange a figure. 
 
 ```{r fig.height=5, fig.width=7.5, warning=F}
 arr1 <- ggarrange(ggarrange(f1, f3, nrow=2, ncol=1, align="v"), 
@@ -212,10 +218,10 @@ arr1 <- ggarrange(ggarrange(f1, f3, nrow=2, ncol=1, align="v"),
 arr1
 ggsave(arr1, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020.png",
        width=7.5, height=5, dpi = 300) # adjust dpi accordingly
+rm(arr1)
 ```
 
-
-# Joining ICS-209-PLUS with FIRED (ICS+FIRED)
+# Joining ICS-209-PLUS with FIRED (ICS+FIRED) (WEST-WIDE)
 
 Read in the add-in records and tidy.
 
@@ -231,13 +237,13 @@ addin <- read.csv("../../data/tabular/mod/wf-incidents/ics-fired_incident_addin.
          LATITUDE = unlist(map(.$geometry,2))) %>%
   rename(geom = geometry) %>%
   st_transform(., crs=st_crs(ics.west.plus))
-
 # Handle the Cold Spring Complex (WA, 2020)
 ics.west.plus <- ics.west.plus %>%
   filter(!INCIDENT_ID == "2020_11903764_WHITNEY",
          !INCIDENT_ID == "2020_11902323_PEARL HILL",
          !INCIDENT_ID == "2020_11901760_COLD SPRINGS") %>%
   bind_rows(., addin)
+rm(addin)
 ```
 
 By spatial buffer overlap.
@@ -253,6 +259,7 @@ ics.west.plus <- ics.west.plus %>%
 ics.buffer <- st_buffer(ics.west.plus, 50000)
 ## Join to any overlapping FIRED perimeters
 buffer.join <- st_join(fired.west.plus, ics.buffer, join=st_intersects)
+rm(ics.buffer)
 ```
 
 A 50km buffer join to all events yields over two million records. Start filtering them down by attributes.
@@ -265,6 +272,7 @@ doy.filter <- buffer.join %>%
   mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
   filter(START_YEAR == ig_year & doy_diff <= 20)
 dim(doy.filter)[1]
+rm(buffer.join)
 ```
 
 Fire size filters ...
@@ -330,7 +338,7 @@ dim(min.filter%>%filter(FINAL_ACRES>1000)%>%group_by(id)%>%filter(n()>1))[1]
 Try to eliminate any exact duplicate rows.
 
 ```{r}
-min.filter <- min.filter %>% dplyr::select(-c(fid_, STUSPS.x, X, X.1)) %>%
+min.filter <- min.filter %>% dplyr::select(-c(STUSPS.x, X, X.1)) %>%
   distinct(.keep_all = T)
 dim(min.filter)[1]
 sum(min.filter$STR_DESTROYED_RES_TOTAL) / sum(ics.west.plus$STR_DESTROYED_RES_TOTAL) * 100
@@ -362,9 +370,9 @@ sum(min.filter_$STR_DESTROYED_RES_TOTAL) / sum(ics.west.plus$STR_DESTROYED_RES_T
 
 Calculate nearest neighbor for incidents with duplicates.
 
-```{r}
+```{r warning=F, message=F}
 ## Calculate centroid for FIRED event
-fired.sub <- fired.west.plus %>% filter(!id %in% min.filter_$id)
+fired.sub <- fired.conus %>% filter(!id %in% min.filter_$id)
 centroid <- st_centroid(fired.sub)
 ## Get the incidents that have duplicates
 ics.sub <- ics.west.plus %>% filter(!INCIDENT_ID %in% min.filter_$INCIDENT_ID)
@@ -405,7 +413,7 @@ tt.fired.df <- tt.fired.df %>% select(-contains(".x"))
 ## Join back to df
 dim(min.filter_%>%filter(INCIDENT_ID %in% tt$INCIDENT_ID))
 final.join <- bind_rows(min.filter_, tt.fired.df) %>%
-  select(-c(X, X.1, doy_diff, ar_abs_dif, ar_chg_dif, bupr_sum, bupr_sum1k, geom.x),
+  select(-c(X, X.1, doy_diff, ar_abs_dif, ar_chg_dif, geom.x),
          -contains(".y"))
   
 ## Final test of duplicates
@@ -443,7 +451,7 @@ Re-create maps with joined data.
 ```{r fig.height=5, fig.width=5}
 map2 <- ggplot() +
   geom_sf(data=final.join%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
-  geom_sf(data=states%>%filter(STUSPS %in% states.sub), fill=NA, color="gray20") +
+  geom_sf(data=states%>%filter(STUSPS %in% west.plus), fill=NA, color="gray20") +
   geom_sf(data=final.join%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
           aes(color=STR_DESTROYED_RES_TOTAL, size=FINAL_ACRES), alpha=0.8) +
   scale_size(range = c(1,6)) +
@@ -534,14 +542,14 @@ arr2 <- ggarrange(ggarrange(f4, f5, nrow=2, ncol=1, align="v"),
 #                            face="italic", color = "black",
 #                            hjust = 1, x = 1, size = 8))
 arr2
-ggsave(arr1, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020_Joined.png",
+ggsave(arr2, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020_Joined.png",
        width=7.5, height=5, dpi = 300) # adjust dpi accordingly
 ```
 
 Save the data.
 
 ```{r}
-st_write(final.join_, "../../data/spatial/mod/ics-fired/ics-fired_west_plus_2001to2020.gpkg", 
+st_write(final.join, "../../data/spatial/mod/ics-fired/ics-fired_west_plus_2001to2020.gpkg", 
          delete_dsn = TRUE)
 ```
 
@@ -569,7 +577,7 @@ ggsave(map3, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_CONUS_Join
        width=7.5, height=5, dpi = 350) # adjust dpi accordingly
 ```
 
-Now join the remaining incidents (CONUS East).
+## Now join the remaining incidents (CONUS East).
 
 ```{r}
 # Isolate eastern wildfires
