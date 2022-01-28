@@ -50,6 +50,7 @@ docs/
 # Data folders
 data/archive/
 data/spatial/mod/boundaries/
+data/spatial/mod/ics-fired/single-part_hull.gpkg
 
 # FAMWEB data
 data/tabular/raw/famweb/

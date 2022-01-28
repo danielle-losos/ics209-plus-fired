@@ -237,11 +237,15 @@ addin <- read.csv("../../data/tabular/mod/wf-incidents/ics-fired_incident_addin.
          LATITUDE = unlist(map(.$geometry,2))) %>%
   rename(geom = geometry) %>%
   st_transform(., crs=st_crs(ics.west.plus))
-# Handle the Cold Spring Complex (WA, 2020)
+# Handle incidents which have been rolled into one report manually
 ics.west.plus <- ics.west.plus %>%
-  filter(!INCIDENT_ID == "2020_11903764_WHITNEY",
-         !INCIDENT_ID == "2020_11902323_PEARL HILL",
-         !INCIDENT_ID == "2020_11901760_COLD SPRINGS") %>%
+  filter(
+    !INCIDENT_ID == "2020_11903764_WHITNEY", 
+    !INCIDENT_ID == "2020_11902323_PEARL HILL",
+    !INCIDENT_ID == "2020_11901760_COLD SPRINGS", 
+    !INCIDENT_ID == "2018_9053386_HIRZ",
+    !INCIDENT_ID == "2018_9096853_DELTA",
+    !INCIDENT_ID == "2012_WA-OWF-000610_OKANOGAN COMPLEX") %>%
   bind_rows(., addin)
 rm(addin)
 ```
@@ -249,8 +253,10 @@ rm(addin)
 By spatial buffer overlap.
 
 ```{r warning=F}
-## Remove records reporting 0 acres (likely erroneous)
+## Remove or fill records reporting 0 acres (likely erroneous)
+## Try filling with FOD first
 ics.west.plus <- ics.west.plus %>% 
+  mutate(FINAL_ACRES = if_else(FINAL_ACRES==0 & !is.na(FOD_FINAL_ACRES), FOD_FINAL_ACRES, FINAL_ACRES)) %>%
   filter(FINAL_ACRES != 0,
          FINAL_KM2 != 0,
          START_YEAR >= 2001,

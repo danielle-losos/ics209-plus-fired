@@ -23,6 +23,12 @@ ics.conus <- ics.conus %>%
          !is.na(DISCOVERY_DATE))
 ```
 
+Load the joined database.
+
+```{r message=F, warning=F}
+ics.fired <- st_read("../../data/spatial/mod/ics-fired/ics-fired_west_plus_2001to2020.gpkg")
+```
+
 Print some summary statistics for CONUS and West+.
 
 ```{r}
@@ -52,6 +58,12 @@ print(paste("Projected Suppression Costs: ", format(round(as.numeric(sum(tmp2$PR
 sum(tmp2$PROJECTED_FINAL_IM_COST) / sum(tmp$PROJECTED_FINAL_IM_COST) * 100
 rm(tmp)
 rm(tmp2)
+```
+
+Print some summaries for FIRED.
+
+```{r}
+sum(fired.conus$tot_ar_km2)
 ```
 
 Plot burned area reported by the ICS-209-PLUS West-wide and CONUS.
