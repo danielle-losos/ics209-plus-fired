@@ -51,6 +51,10 @@ docs/
 data/archive/
 data/spatial/mod/boundaries/
 data/spatial/mod/ics-fired/single-part_hull.gpkg
+data/spatial/mod/ics-fired/ics-fired_1km_flat-bevel.gpkg
+data/spatial/mod/ics-fired/ics-fired_west_plus.zip
+!*.gpkg-shm
+!*.gpkg-wal
 
 # FAMWEB data
 data/tabular/raw/famweb/
@@ -60,3 +64,4 @@ code/Python/.ipynb_checkpoints
 
 # R code to ignore
 code/R/scratch.R
+code/R/tidy-data.R
