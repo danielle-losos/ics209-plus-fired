@@ -442,6 +442,15 @@ rm(min.filter)
 rm(min.filter_)
 ```
 
+Re-attach state boundaries.
+
+```{r}
+## Re-attach state boundaries
+ics.fired <- 
+  st_join(ics.fired%>%dplyr::select(-STUSPS), 
+          states%>%dplyr::select(STUSPS, geom), join=st_intersects, largest=T)
+```
+
 Final stats.
 
 ```{r}
