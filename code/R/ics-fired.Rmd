@@ -413,9 +413,9 @@ dim(tt %>% group_by(id) %>% filter(n()>1))[1]
 
 ```{r}
 ## Now grab FIRED perimeter,
-tt.fired.df <- inner_join(fired.conus%>%as_tibble(), tt, by="id", left=F) %>% st_as_sf()
+tt.fired.df <- inner_join(fired.conus%>%as_tibble(), tt, by="id", left=F)
 # Tidy it
-tt.fired.df <- tt.fired.df %>% select(-contains(".x"))
+tt.fired.df <- tt.fired.df %>% select(-contains(".x"), -geom.y)
 ## Join back to df
 dim(min.filter_%>%filter(INCIDENT_ID %in% tt$INCIDENT_ID))
 final.join <- bind_rows(min.filter_, tt.fired.df) %>%
@@ -425,6 +425,18 @@ final.join <- bind_rows(min.filter_, tt.fired.df) %>%
 ## Final test of duplicates
 dim(final.join %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
 dim(final.join %>% group_by(id) %>% filter(n()>1))[1]
+```
+
+Reattach the data and tidy.
+
+```{r}
+final.join_ <- final.join %>%
+  dplyr::select(id, INCIDENT_ID, geom) %>%
+  as_tibble() %>%
+  inner_join(., fired.west.plus%>%dplyr::select(-geom), by="id") %>%
+  inner_join(., ics.west.plus%>%dplyr::select(-geom), by="INCIDENT_ID") %>%
+  dplyr::select(-X.1, -STUSPS.x) %>%
+  rename(STUSPS = STUSPS.y)
 ```
 
 Final stats.
@@ -438,18 +450,6 @@ print(paste("Percent of acres burned by western wildfires:  ",
             sum(final.join$FINAL_ACRES) / sum(ics.west.plus$FINAL_ACRES) * 100, sep=""))
 print(paste("Percent of acres burned by CONUS wildfires:  ",
             sum(final.join$FINAL_ACRES) / sum(ics.conus$FINAL_ACRES) * 100, sep=""))
-```
-
-Attach BUPR summaries.
-
-```{r}
-# Read in the summary stats by FIRED id
-bupr.sums <- read.csv("../../../fired/data/events/mod/fired_conus_bupr_sum.csv") %>%
-  as_tibble() %>%
-  dplyr::select(-c(X, bupr_sum.1))
-# Join to df
-final.join_ <- inner_join(final.join, bupr.sums, by="id")
-glimpse(final.join_)
 ```
 
 Re-create maps with joined data.
@@ -543,10 +543,6 @@ ggsave(f5, file = "../../figs/Westwide-PLUS_BurnedArea_1999to2020_Joined.png",
 ```{r fig.height=5, fig.width=7.5, warning=F}
 arr2 <- ggarrange(ggarrange(f4, f5, nrow=2, ncol=1, align="v"), 
                   map2, ncol=2, nrow=1, align="h")
-# arr1 <- annotate_figure(
-#   arr1, bottom = text_grob("Data Source: St. Denis et al. (2020), updated", 
-#                            face="italic", color = "black",
-#                            hjust = 1, x = 1, size = 8))
 arr2
 ggsave(arr2, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020_Joined.png",
        width=7.5, height=5, dpi = 300) # adjust dpi accordingly
