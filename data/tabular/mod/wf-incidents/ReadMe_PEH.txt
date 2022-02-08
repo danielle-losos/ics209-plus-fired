@@ -1,4 +1,4 @@
-Data file with “_PEH” appended to the end was created as follows: 
+﻿Data file with “_PEH” appended to the end was created as follows: 
 
 1. Save original data file (e.g., ics209plus_wf_incidents_west_1999to2020_qc.csv) as
 .xlsx file (b/c Phil doesn't know how to deal with multiple delimiters).  
@@ -56,3 +56,7 @@ data.CAUSE_UPDATED(idx) = {'L'};
 idx = find(strcmp(data.INCIDENT_ID,'2015_2915082_VALLEY'));
 data.CAUSE_UPDATED(idx) = {'H'};
 % https://www.fire.ca.gov/incidents/2015/9/12/valley-fire/
+
+idx = find(strcmp(data.INCIDENT_ID,'2017_9258165_THOMAS'));
+data.CAUSE_UPDATED(idx) = {'H'};
+% https://www.fire.ca.gov/incidents/2017/12/4/thomas-fire/
