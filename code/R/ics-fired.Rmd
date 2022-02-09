@@ -296,7 +296,6 @@ area.filter <- doy.filter %>%
          ar_abs_dif == min(ar_abs_dif)) %>%
   ungroup()
 dim(area.filter)[1]
-rm(doy.filter)
 ```
 
 Now double check on how many duplicates we still have.
@@ -325,7 +324,6 @@ min.filter <- area.filter %>%
   filter(doy_diff == min(doy_diff)) %>%
   ungroup()
 dim(min.filter)[1]
-rm(area.filter)
 ```
 
 Again, double check on how many duplicates we still have.
@@ -411,44 +409,34 @@ tt <- tt %>% distinct(id, .keep_all = TRUE)
 ## Double check duplicates
 dim(tt %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
 dim(tt %>% group_by(id) %>% filter(n()>1))[1]
-rm(d)
-rm(t)
-rm(dd)
-rm(ics.sub)
-rm(fired.sub)
-rm(centroid)
 ```
 
 ```{r}
 ## Now grab FIRED perimeter,
-tt.fired.df <- tt %>% dplyr::select(id, INCIDENT_ID) %>% as_tibble() %>%
-  dplyr::select(-geom) %>%
-  inner_join(fired.west.plus%>%as_tibble(), ., by="id", left=F) %>%
-  inner_join(., ics.west.plus%>%as_tibble()%>%dplyr::select(-STUSPS, -geom), by="INCIDENT_ID") %>%
-  dplyr::select(-X.1)
-
+tt.fired.df <- inner_join(fired.conus%>%as_tibble(), tt, by="id", left=F)
+# Tidy it
+tt.fired.df <- tt.fired.df %>% select(-contains(".x"), -geom.y)
 ## Join back to df
-dim(min.filter_%>%filter(INCIDENT_ID %in% tt.fired.df$INCIDENT_ID))
-## Join for the final df
+dim(min.filter_%>%filter(INCIDENT_ID %in% tt$INCIDENT_ID))
 final.join <- bind_rows(min.filter_, tt.fired.df) %>%
-  select(-c(doy_diff, ar_abs_dif, ar_chg_dif, STUSPS.y))
-
+  select(-c(X, X.1, doy_diff, ar_abs_dif, ar_chg_dif, geom.x),
+         -contains(".y"))
+  
 ## Final test of duplicates
 dim(final.join %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
 dim(final.join %>% group_by(id) %>% filter(n()>1))[1]
-rm(tt)
-rm(tt.fired.df)
-rm(min.filter)
-rm(min.filter_)
 ```
 
-Re-attach state boundaries.
+Reattach the data and tidy.
 
 ```{r}
-## Re-attach state boundaries
-ics.fired <- 
-  st_join(ics.fired%>%dplyr::select(-STUSPS), 
-          states%>%dplyr::select(STUSPS, geom), join=st_intersects, largest=T)
+final.join_ <- final.join %>%
+  dplyr::select(id, INCIDENT_ID, geom) %>%
+  as_tibble() %>%
+  inner_join(., fired.west.plus%>%dplyr::select(-geom), by="id") %>%
+  inner_join(., ics.west.plus%>%dplyr::select(-geom), by="INCIDENT_ID") %>%
+  dplyr::select(-X.1, -STUSPS.x) %>%
+  rename(STUSPS = STUSPS.y)
 ```
 
 Final stats.
@@ -641,7 +629,6 @@ area.filter <- doy.filter %>%
          ar_abs_dif == min(ar_abs_dif)) %>%
   ungroup()
 dim(area.filter)[1]
-rm(doy.filter)
 ```
 
 Now double check on how many duplicates we still have.
@@ -670,7 +657,6 @@ min.filter <- area.filter %>%
   filter(doy_diff == min(doy_diff)) %>%
   ungroup()
 dim(min.filter)[1]
-rm(area.filter)
 ```
 
 Again, double check on how many duplicates we still have.
@@ -691,7 +677,7 @@ dim(min.filter%>%filter(FINAL_ACRES>100)%>%group_by(id)%>%filter(n()>1))[1]
 Try to eliminate any exact duplicate rows.
 
 ```{r}
-min.filter <- min.filter %>% dplyr::select(-c(STUSPS.x, X, X.1)) %>%
+min.filter <- min.filter %>% dplyr::select(-c(fid_, STUSPS.x, X, X.1)) %>%
   distinct(.keep_all = T)
 dim(min.filter)[1]
 sum(min.filter$STR_DESTROYED_RES_TOTAL) / sum(ics.east$STR_DESTROYED_RES_TOTAL) * 100
@@ -756,10 +742,6 @@ tt <- tt %>% distinct(id, .keep_all = TRUE)
 ## Double check duplicates
 dim(tt %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
 dim(tt %>% group_by(id) %>% filter(n()>1))[1]
-rm(d)
-rm(dd)
-rm(ics.sub)
-rm(fired.sub)
 ```
 
 ```{r}
