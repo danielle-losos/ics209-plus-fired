@@ -1,4 +1,4 @@
-Data file with ì_PEHî appended to the end was created as follows: 
+ÔªøData file with ‚Äú_PEH‚Äù appended to the end was created as follows: 
 
 1. Save original data file (e.g., ics209plus_wf_incidents_west_1999to2020_qc.csv) as
 .xlsx file (b/c Phil doesn't know how to deal with multiple delimiters).  
@@ -11,7 +11,7 @@ FOD_CAUSE, and then manually based on checking media, CalFire, and other reports
 code of this section is included below, so as to document the fires manually updated. 
 
 4. Save new files (.csv and .mat format) with CAUSE_UPDATED appended as last column, and
-with ì_PEHî appended to the file name.
+with ‚Äú_PEH‚Äù appended to the file name.
 
 *This process is contained in the Matlab file ICS209_PLUS_West_ImportData_UpdateCauseCode.m
 
@@ -53,3 +53,10 @@ data.CAUSE_UPDATED(idx) = {'L'};
 idx = find(strcmp(data.INCIDENT_NAME,'CZU AUG LIGHTNING'));
 data.CAUSE_UPDATED(idx) = {'L'};
 
+idx = find(strcmp(data.INCIDENT_ID,'2015_2915082_VALLEY'));
+data.CAUSE_UPDATED(idx) = {'H'};
+% https://www.fire.ca.gov/incidents/2015/9/12/valley-fire/
+
+idx = find(strcmp(data.INCIDENT_ID,'2017_9258165_THOMAS'));
+data.CAUSE_UPDATED(idx) = {'H'};
+% https://www.fire.ca.gov/incidents/2017/12/4/thomas-fire/
