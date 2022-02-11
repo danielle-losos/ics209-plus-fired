@@ -7,6 +7,7 @@ library(tidyverse)
 vpd <- read.csv("data/tabular/mod/gridmet/gridmet_states_month_avg_vpd.csv")
 
 fm1000 <- read.csv("data/tabular/mod/gridmet/gridmet_states_month_avg_fm1000.csv")
+
 # Tidy, overwrite
 
 vpd %>% 
