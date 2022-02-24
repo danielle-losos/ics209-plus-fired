@@ -54,7 +54,11 @@ data/spatial/mod/ics-fired/single-part_hull.gpkg
 data/spatial/mod/ics-fired/ics-fired_1km_flat-bevel.gpkg
 data/spatial/mod/ics-fired/ics-fired_west_plus.zip
 data/spatial/mod/wf-incidents/ics209plus_wf_incidents_spatial_west_1999to2020_qc.gpkg
-data/spatial/mod/wf-incidents/!*wf_incidents_west_bupr_summaries
+data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.gpkg
+data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shp
+data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.dbf
+data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shp.xml
+data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shx
 !*.gpkg-shm
 !*.gpkg-wal
 
