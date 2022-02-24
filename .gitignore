@@ -53,6 +53,8 @@ data/spatial/mod/boundaries/
 data/spatial/mod/ics-fired/single-part_hull.gpkg
 data/spatial/mod/ics-fired/ics-fired_1km_flat-bevel.gpkg
 data/spatial/mod/ics-fired/ics-fired_west_plus.zip
+data/spatial/mod/wf-incidents/ics209plus_wf_incidents_spatial_west_1999to2020_qc.gpkg
+data/spatial/mod/wf-incidents/!*wf_incidents_west_bupr_summaries
 !*.gpkg-shm
 !*.gpkg-wal
 
@@ -65,3 +67,7 @@ code/Python/.ipynb_checkpoints
 # R code to ignore
 code/R/scratch.R
 code/R/tidy-data.R
+code/archive/
+
+# Misc
+figs/archive/
