@@ -72,3 +72,18 @@ fm1000min.gacc <- read_csv("data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept
 fm1000.gacc %>% select(GACCName, GACCUnitID, GACCAbbrev, contains("_fm1000")) %>%
         write.csv(., "data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept_min_fm1000_.csv")
 
+
+## WEST
+vpd.west <- read_csv("data/tabular/mod/gridmet/gridmet_west_west_may_sept_avg_vpd.csv")
+tmp <- vpd.west %>% select("system:index", contains("_vpd")) %>%
+        rename(REGION = "system:index") %>%
+        mutate(REGION = "WEST_WIDE") %>%
+        write.csv(., "data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept_avg_vpd_.csv") 
+
+fm1000.west <- read_csv("data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept_avg_fm1000.csv")
+fm1000.west %>% select(GACCName, GACCUnitID, GACCAbbrev, contains("_fm1000")) %>%
+        write.csv(., "data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept_avg_fm1000_.csv")
+
+fm1000min.west <- read_csv("data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept_min_fm1000.csv")
+fm1000.west %>% select(GACCName, GACCUnitID, GACCAbbrev, contains("_fm1000")) %>%
+        write.csv(., "data/tabular/mod/gridmet/gridmet_natl_gaccs_may_sept_min_fm1000_.csv")
