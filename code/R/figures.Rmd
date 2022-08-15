@@ -9,170 +9,103 @@ knitr::opts_chunk$set(echo = TRUE)
 source("setup.R")
 ```
 
-```{r}
-# Grab a glimpse of the data
-glimpse(ics.conus)
+## Summary Figures by Regions
+
+State Administrative Units
+
+```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
+
+states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_conus.gpkg")
+state.summary <- read_csv("../../data/tabular/mod/summaries/conus_state_summary_key_vars.csv")
+
+# join the attributes
+state.summary <- inner_join(states%>%as_tibble(), state.summary, by="STUSPS") %>%
+  st_as_sf()
+
+# plot key metrics
+ggplot() +
+  geom_sf(data=state.summary, aes(fill=STR_DESTR_TOTAL), color="gray40") +
+  scale_fill_viridis_c(option="magma", trans="log10", na.value = 0) +
+  labs(fill="Structures Destroyed") +
+  theme_void() + 
+  guides(fill = guide_colourbar(direction = "horizontal", barwidth = 6, barheight = 0.5, 
+                                ticks=F, title.position = "top"),
+         label.theme = element_text(angle = 0, size = 8)) +
+  theme(legend.title = element_text(angle = 0, size=8),
+         legend.text = element_text(size=7),
+         legend.position=c(0.2, 0.1),
+         plot.title = element_text(size=10, hjust=0.2))
+
+rm(states, state.summary)
 ```
 
-Filter out incidents with 0 acres or with missing temporal information.
+Geographic Area Coordination Centers (GACC)
 
-```{r}
-# Remove records reporting 0 acres (likely erroneous)
-ics.conus <- ics.conus %>% 
-  filter(FINAL_ACRES != 0, FINAL_KM2 != 0,
-         !is.na(DISCOVERY_DATE))
+```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
+
+gaccs <- st_read("../../../data/boundaries/political/GACC/natl_gacc_albers_conus.gpkg")
+gacc.summary <- read_csv("../../data/tabular/mod/summaries/conus_gacc_summary_key_vars.csv")
+
+# join the attributes
+gacc.summary <- inner_join(gaccs%>%as_tibble(), gacc.summary, by="GACCAbbrev") %>%
+  st_as_sf()
+
+# plot key metrics
+ggplot() +
+  geom_sf(data=gacc.summary, aes(fill=STR_DESTR_TOTAL), color="gray40") +
+  scale_fill_viridis_c(option="magma", trans="log10", na.value = 0) +
+  labs(fill="Structures Destroyed") +
+  theme_void() + 
+  guides(fill = guide_colourbar(direction = "horizontal", barwidth = 6, barheight = 0.5, 
+                                ticks=F, title.position = "top"),
+         label.theme = element_text(angle = 0, size = 8)) +
+  theme(legend.title = element_text(angle = 0, size=8),
+         legend.text = element_text(size=7),
+         legend.position=c(0.2, 0.1),
+         plot.title = element_text(size=10, hjust=0.2))
+
+rm(gaccs, gacc.summary)
+
 ```
 
-Load the joined database.
+Ecoregions (Level III)
 
-```{r message=F, warning=F}
-ics.fired <- st_read("../../data/spatial/mod/ics-fired/ics-fired_west_plus_2001to2020.gpkg")
+```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
+
+ecol3 <- st_read("../../../data/boundaries/ecological/ecoregion/conus_cec_eco.gpkg", layer="eco_l3")
+eco.summary <- read_csv("../../data/tabular/mod/summaries/conus_ecol3_summary_key_vars.csv")
+
+# join the attributes
+eco.summary <- inner_join(ecol3%>%as_tibble(), eco.summary, by="NA_L3CODE") %>%
+  st_as_sf()
+
+# plot key metrics
+ggplot() +
+  geom_sf(data=eco.summary, aes(fill=STR_DESTR_TOTAL), color=NA) +
+  scale_fill_viridis_c(option="magma", trans="log10", na.value = 0) +
+  labs(fill="Structures Destroyed") +
+  theme_void() + 
+  guides(fill = guide_colourbar(direction = "horizontal", barwidth = 6, barheight = 0.5, 
+                                ticks=F, title.position = "top"),
+         label.theme = element_text(angle = 0, size = 8)) +
+  theme(legend.title = element_text(angle = 0, size=8),
+         legend.text = element_text(size=7),
+         legend.position=c(0.2, 0.1),
+         plot.title = element_text(size=10, hjust=0.2))
+
+rm(ecol3, eco.summary)
+
 ```
 
-Print some summary statistics for CONUS and West+.
-
-```{r}
-# Burned area
-print(paste("Burned Area (acres): ", format(round(as.numeric(sum(ics.conus$FINAL_ACRES)), 1), 
-                                            nsmall=1, big.mark=","), sep=""))
-# Homes
-print(paste("Homes Destroyed: ", round(sum(ics.conus$STR_DESTROYED_RES_TOTAL), 0), sep=""))
-# Cost
-tmp <- ics.conus %>% filter(!is.na(PROJECTED_FINAL_IM_COST))
-print(paste("Projected Suppression Costs: ", format(round(as.numeric(sum(tmp$PROJECTED_FINAL_IM_COST)), 1), 
-                                            nsmall=1, big.mark=","), sep=""))
-## For west+
-print("~~~~~~~~West-Wide~~~~~~~~")
-west.plus <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT", "TX", "OK")
-ics.west.plus <- ics.conus %>% filter(STUSPS %in% west.plus)
-# Burned area
-print(paste("Burned Area (acres): ", format(round(as.numeric(sum(ics.west.plus$FINAL_ACRES)), 1), 
-                                            nsmall=1, big.mark=","), sep=""))
-# Homes
-print(paste("Homes Destroyed: ", round(sum(ics.west.plus$STR_DESTROYED_RES_TOTAL), 0), sep=""))
-# Cost
-tmp2 <- ics.west.plus %>% filter(!is.na(PROJECTED_FINAL_IM_COST))
-print(paste("Projected Suppression Costs: ", format(round(as.numeric(sum(tmp2$PROJECTED_FINAL_IM_COST)), 1), 
-                                            nsmall=1, big.mark=","), sep=""))
-## West-wide percentages
-sum(tmp2$PROJECTED_FINAL_IM_COST) / sum(tmp$PROJECTED_FINAL_IM_COST) * 100
-rm(tmp)
-rm(tmp2)
-```
-
-Print some summaries for FIRED.
-
-```{r}
-sum(fired.conus$tot_ar_km2)
-```
-
-Plot burned area reported by the ICS-209-PLUS West-wide and CONUS.
-
-```{r fig.width=5, fig.height=3}
-# Group the western U.S. incidents
-ics.west.grp <- ics.west %>% 
-  group_by(START_YEAR) %>%
-  summarize(burned_area = sum(FINAL_ACRES)) %>%
-  ungroup()
-# Grab the top 5
-top5 <- ics.west.grp %>% slice_max(burned_area, n=5)
-# Plot
-f1 <- ics.conus %>% group_by(START_YEAR) %>%
-  summarize(burned_area = sum(FINAL_ACRES)) %>%
-  ungroup() %>%
-  ggplot(aes(x=START_YEAR, y=burned_area)) +
-  geom_line(data=ics.west.grp, aes(x=START_YEAR, y=burned_area, color="Western U.S."), position="stack",
-            linetype = 6, size = 0.8) +
-  geom_point(data=ics.west.grp, aes(x=START_YEAR, y=burned_area), 
-             shape=21, size = 1.75, color = "gray20", fill = "gray50") +
-  geom_text(data=. %>% filter(START_YEAR %in% top5$START_YEAR), 
-            aes(label=paste(round(burned_area / 1e6, 1), "M")),
-            position=position_nudge(x=-1.2,y=-10), size=3) +
-  geom_line() +
-  geom_point(shape=21, size = 2.5, color = "gray20", fill = "red") +
-  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
-  scale_x_continuous(limits=c(1999, 2020)) +
-  scale_color_manual(name = "", values=c("Western U.S."="gray60")) +
-  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="Conterminous U.S. burned area (1999-2020)\n") +
-  theme_minimal() +
-  theme(plot.title = element_text(size = 12, hjust=-0.4),
-        legend.position=c(0.2, 1.1))
-f1
-ggsave(f1, file = "../../figs/BurnedArea_1999to2020.png",
-       width=5, height=3, dpi = 300) # adjust dpi accordingly
-```
-
-Plot structures destroyed by incident.
-
-```{r fig.height=3.5, fig.width=6}
-# Grab the top 15
-top15 <- ics.west.plus %>% slice_max(STR_DESTROYED_RES_TOTAL, n=15)
-# Plot and label
-f2 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL, group=factor(INCIDENT_NAME), 
-                          fill=STR_DESTROYED_RES_TOTAL), color="grey10") +
-  geom_bar(stat="identity", position='stack') +
-  scale_fill_viridis_c(option="plasma", trans="sqrt") +
-  labs(x="Ignition Year\n", y="Homes Destroyed\n", fill="",
-       title="Homes destroyed by Western wildfires (1999-2020)\n",
-       caption="Maxwell C. Cook, PhD Student, Department of Geography\nData source: St. Denis et al., 2020 (updated)") +
-  ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top15$INCIDENT_ID), 
-                           aes(label=INCIDENT_NAME), position=position_jitterdodge(0.5), size = 2) +
-  theme_minimal() +
-    # coord_cartesian(ylim=c(0, 1150)) +
-  theme(plot.title = element_text(size = 12),
-        plot.subtitle = element_text(size=8),
-        plot.caption = element_text(size=7),
-        axis.title.x = element_text(size=9),
-        axis.title.y = element_text(size=9),
-        axis.text.y = element_text(size=8),
-        axis.text.x = element_text(size=8),
-        legend.position="none")
-f2
-rm(top15)
-ggsave(f2, file = "../../figs/Westwide_HomeLoss_1999to2020.png",
-       width=6, height=3.5, dpi = 300) # adjust dpi accordingly
-```
-
-Plot cumulative residential structures destroyed from ICS-209-PLUS for CONUS and West.
-
-```{r warning=F, message=F, fig.width=5, fig.height=3}
-# Get some text
-sum(ics.west$STR_DESTROYED_RES_TOTAL)
-sum(ics.conus$STR_DESTROYED_RES_TOTAL)
-## Group sum ics.west
-ics.west.grp <- ics.west %>% 
-  group_by(START_YEAR) %>%
-  summarize(destr_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
-  mutate(destr_res_c = cumsum(destr_res))
-# plot
-f3 <- ics.conus %>% as_tibble() %>%
-  group_by(START_YEAR) %>%
-  summarize(destr_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
-  mutate(destr_res_c = cumsum(destr_res)) %>%
-  ungroup() %>%
-  ggplot() +
-  geom_area(aes(x=START_YEAR, y=destr_res_c), position='stack', fill="grey60") +
-  geom_line(data=ics.west.grp, aes(x=START_YEAR, y=destr_res_c, color="Western U.S."), position="stack",
-            linetype = 4, size = 1.05) +
-  scale_color_manual(name = "", values=c("Western U.S."="black")) +
-  scale_y_continuous(labels = scales::label_number(suffix = " K", scale = 1e-3)) + 
-  labs(x="Ignition Year", y="Structures Destroyed",
-       title="Homes destroyed by wildfire (1999-2020)\n")+
-  # annotation_custom(grob) +
-  theme_minimal() +
-  theme(legend.position=c(0.2, 1.1))
-f3
-ggsave(f3, file = "../../figs/Cumulative_HomeLoss_1999to2020.png",
-       width=5, height=3, dpi = 300) # adjust dpi accordingly
-```
+## Figure 1. Spatial and temporal distribution of residential structure loss.
 
 Map structures destroyed and burned area.
 
 ```{r fig.height=5, fig.width=5}
 map1 <- ggplot() +
-  geom_sf(data=ics.conus%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
+  geom_sf(data=ics.west.plus%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
   geom_sf(data=states%>%filter(STUSPS %in% states.sub), fill=NA, color="gray20") +
-  geom_sf(data=ics.conus%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
+  geom_sf(data=ics.west.plus%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
           aes(color=STR_DESTROYED_RES_TOTAL, size=FINAL_ACRES), alpha=0.8) +
   scale_size(range = c(1,6)) +
   scale_color_viridis_c(option="inferno", trans="log10") +
@@ -186,9 +119,336 @@ map1 <- ggplot() +
   theme(legend.title = element_text(angle = 90, size=10),
         legend.position=c(0.85, 0.7))
 map1
-ggsave(map1, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Size_CONUS.png", sep=""), 
+ggsave(map1, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_WestPlus.png", sep=""), 
        width=5, height=5, dpi = 350) # adjust dpi accordingly
+rm(map1)
 ```
+
+Homes destroyed by incident.
+
+```{r fig.width=4, fig.height=2.5, warning=F}
+## reorder factors
+ics.west.plus$INCIDENT_NAME <- 
+  reorder(ics.west.plus$INCIDENT_NAME, ics.west.plus$STR_DESTROYED_RES_TOTAL)
+ics.west.plus$INCIDENT_NAME <- 
+  factor(ics.west.plus$INCIDENT_NAME, levels=rev(levels(ics.west.plus$INCIDENT_NAME)))
+# Grab the top 15
+top5 <- ics.west.plus %>% slice_max(STR_DESTROYED_RES_TOTAL, n=5)
+# Plot and label
+f1 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL, 
+                                     group=factor(INCIDENT_NAME), 
+                                     fill=STR_DESTROYED_RES_TOTAL), color="grey90") +
+  geom_bar(stat="identity", position='stack') +
+  scale_fill_viridis_c(option="inferno", trans="log10") +
+  labs(
+    x="", y="Homes Destroyed\n", fill="") +
+  # title="Homes destroyed by Western wildfires (1999-2020)\n",
+  # caption="Maxwell C. Cook, PhD Student, Department of Geography,
+  # University of Colorado, Boulder\nData source: St. Denis et al., 2020 (updated)") +
+  # ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top5$INCIDENT_ID),
+  #                          aes(label=INCIDENT_NAME), position=position_dodge(0.5), size = 2) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 9),
+        plot.subtitle = element_text(size=7),
+        plot.caption = element_text(size=6),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8),
+        axis.text.y = element_text(size=7),
+        axis.text.x = element_text(size=7),
+        legend.position="none")
+f1
+ggsave(f1, file = "../../figs/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png",
+       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
+rm(top5)
+rm(f1)
+```
+
+Burned area (option 1).
+
+```{r fig.width=4, fig.height=2.5, warning=F}
+## reorder factors
+ics.west.plus$INCIDENT_NAME <- 
+  reorder(ics.west.plus$INCIDENT_NAME, ics.west.plus$FINAL_ACRES)
+ics.west.plus$INCIDENT_NAME <- 
+  factor(ics.west.plus$INCIDENT_NAME, levels=rev(levels(ics.west.plus$INCIDENT_NAME)))
+## Plot it
+f2 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=FINAL_ACRES, 
+                                     group=factor(INCIDENT_NAME), 
+                                     fill=FINAL_ACRES), color="black") +
+  geom_bar(stat='identity', position="stack") +
+  scale_fill_viridis_c(option="rocket", trans="sqrt") +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
+  theme_minimal() +
+  labs(x="", y="Burned Area (acres)") +
+  theme(plot.title = element_text(size = 9),
+        plot.subtitle = element_text(size=7),
+        plot.caption = element_text(size=6),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8),
+        axis.text.y = element_text(size=7),
+        axis.text.x = element_text(size=7),
+        legend.position="none")
+f2
+ggsave(f2, file = "../../figs/Westwide-PLUS_BurnedArea_byIncident_1999to2020.png",
+       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
+rm(f2)
+```
+
+Burned area (Option 2).
+
+```{r fig.width=4, fig.height=2.5, warning=F}
+## Plot
+f3 <- ics.west.plus %>% group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup() %>%
+  ggplot(aes(x=START_YEAR, y=burned_area)) +
+  geom_line() +
+  geom_point(aes(size=burned_area, fill=burned_area), shape=21, color = "gray20") +
+  scale_fill_viridis_c(option="rocket", trans="sqrt") +
+  scale_size(1,5) +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
+  scale_x_continuous(limits=c(1999, 2020)) +
+  coord_cartesian(clip = "off") +
+  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 9),
+        plot.subtitle = element_text(size=7),
+        plot.caption = element_text(size=6),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8),
+        axis.text.y = element_text(size=7),
+        axis.text.x = element_text(size=7),
+        legend.position="none")
+f3
+ggsave(f3, file = "../../figs/Westwide-PLUS_BurnedArea_1999to2020.png",
+       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
+rm(f3)
+```
+
+Arrange a figure. 
+
+```{r fig.height=5, fig.width=7.5, warning=F}
+arr1 <- ggarrange(ggarrange(f1, f3, nrow=2, ncol=1, align="v"), 
+                  map1, ncol=2, nrow=1, align="h")
+# arr1 <- annotate_figure(
+#   arr1, bottom = text_grob("Data Source: St. Denis et al. (2020), updated", 
+#                            face="italic", color = "black",
+#                            hjust = 1, x = 1, size = 8))
+arr1
+ggsave(arr1, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020.png",
+       width=7.5, height=5, dpi = 300) # adjust dpi accordingly
+rm(arr1)
+```
+
+
+
+
+## Data Prep
+
+Filter out incidents with 0 acres or with missing temporal information.
+
+```{r}
+# Remove records reporting 0 acres (likely erroneous)
+ics.conus <- ics.conus %>% 
+  filter(FINAL_ACRES != 0, FINAL_KM2 != 0,
+         !is.na(DISCOVERY_DATE))
+```
+
+Print some summary statistics for CONUS and West+.
+
+```{r}
+print("~~~~~~~~CONUS~~~~~~~~")
+# Burned area
+print(paste("Burned Area (acres): ", format(round(as.numeric(sum(ics.conus$FINAL_ACRES)), 1), 
+                                            nsmall=1, big.mark=","), sep=""))
+# Homes
+print(paste("Homes Destroyed: ", round(sum(ics.conus$STR_DESTROYED_RES_TOTAL), 0), sep=""))
+# Cost
+print(paste("Projected Suppression Costs: ", 
+            format(round(as.numeric(sum(ics.conus$PROJECTED_FINAL_IM_COST, na.rm=T)), 1), 
+                   nsmall=1, big.mark=","), sep=""))
+## For west+
+print("~~~~~~~~West-Wide~~~~~~~~")
+west.plus <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT", "TX", "OK")
+ics.west.plus <- ics.conus %>% filter(STUSPS %in% west.plus)
+# Burned area
+print(paste("Burned Area (acres): ", format(round(as.numeric(sum(ics.west.plus$FINAL_ACRES)), 1), 
+                                            nsmall=1, big.mark=","), sep=""))
+# Homes
+print(paste("Homes Destroyed: ", round(sum(ics.west.plus$STR_DESTROYED_RES_TOTAL), 0), sep=""))
+# Cost
+print(paste("Projected Suppression Costs: ", 
+            format(round(as.numeric(sum(ics.west$PROJECTED_FINAL_IM_COST, na.rm=T)), 1), 
+                   nsmall=1, big.mark=","), sep=""))
+
+## West-wide percentages
+print("~~~~~~~~~~~Percentages~~~~~~~~~~~~")
+sum(ics.west$FINAL_ACRES, na.rm=T) / sum(ics.conus$FINAL_ACRES, na.rm=T) * 100
+sum(ics.west$STR_DESTROYED_RES_TOTAL, na.rm=T) / sum(ics.conus$STR_DESTROYED_RES_TOTAL, na.rm=T) * 100
+sum(ics.west$PROJECTED_FINAL_IM_COST, na.rm=T) / sum(ics.conus$PROJECTED_FINAL_IM_COST, na.rm=T) * 100
+
+```
+
+Print some summaries for FIRED.
+
+```{r}
+sum(fired.conus$tot_ar_km2)
+mean(fired.conus$mx_grw_km2)
+```
+
+## ICS209-PLUS Figures
+
+Plot burned area reported by the ICS-209-PLUS West-wide and CONUS.
+
+```{r fig.width=5, fig.height=3}
+
+# Group the western U.S. incidents
+ics.west.yr <- ics.west %>% 
+  group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup()
+
+# Grab the top 5
+top5 <- ics.west.yr %>% slice_max(burned_area, n=5)
+
+# Plot
+f1 <- ics.conus %>% group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup() %>%
+  ggplot(aes(x=START_YEAR, y=burned_area)) +
+  geom_line(data=ics.west.yr, aes(x=START_YEAR, y=burned_area, color="Western U.S."), position="stack",
+            linetype = 6, size = 0.8) +
+  geom_point(data=ics.west.yr, aes(x=START_YEAR, y=burned_area), 
+             shape=21, size = 1.75, color = "gray20", fill = "gray50") +
+  geom_text(data=. %>% filter(START_YEAR %in% top5$START_YEAR), 
+            aes(label=paste(round(burned_area / 1e6, 1), "M")),
+            position=position_nudge(x=-1.2,y=-10), size=3) +
+  geom_line() +
+  geom_point(shape=21, size = 2.5, color = "gray20", fill = "red") +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
+  scale_x_continuous(limits=c(1999, 2020)) +
+  scale_color_manual(name = "", values=c("Western U.S."="gray60")) +
+  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="Conterminous U.S. burned area (1999-2020)\n") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 12, hjust=-0.4),
+        legend.position=c(0.2, 1.1))
+
+f1
+
+ggsave(f1, file = "../../figs/ICS209-PLUS_BurnedArea_westANDconus.png",
+       width=5, height=3, dpi = 300) # adjust dpi accordingly
+
+rm(top5)
+
+```
+
+Plot structures destroyed by incident.
+
+```{r fig.height=3.5, fig.width=6}
+
+# Grab the top 15
+top10 <- ics.west %>% slice_max(STR_DESTROYED_RES_TOTAL, n=10)
+
+# Plot and label
+f2 <- ggplot(data=ics.west, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL,
+                                group=factor(INCIDENT_NAME), 
+                                fill=STR_DESTROYED_RES_TOTAL), color="grey10") +
+  geom_bar(stat="identity", position='stack') +
+  scale_fill_viridis_c(option="plasma", trans="sqrt") +
+  labs(x="Ignition Year\n", y="Homes Destroyed\n", fill="",
+       title=
+         "Homes destroyed by Western wildfires (1999-2020)\n",
+       caption=
+         "Maxwell C. Cook, PhD Student, Department of Geography\nData source: St. Denis et al., 2020 (updated)") +
+  ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top10$INCIDENT_ID), 
+                           aes(label=INCIDENT_NAME), position=position_jitterdodge(0.5), size = 2) +
+  theme_minimal() +
+    # coord_cartesian(ylim=c(0, 1150)) +
+  theme(plot.title = element_text(size = 12),
+        plot.subtitle = element_text(size=8),
+        plot.caption = element_text(size=7),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_text(size=9),
+        axis.text.y = element_text(size=8),
+        axis.text.x = element_text(size=8),
+        legend.position="none")
+
+f2
+
+ggsave(f2, file = "../../figs/ICS209-PLUS_West_HomeLoss_byIncident.png",
+       width=6, height=3.5, dpi = 300) # adjust dpi accordingly
+
+rm(top10)
+
+```
+
+Plot cumulative residential structures destroyed from ICS-209-PLUS for CONUS and West.
+
+```{r warning=F, message=F, fig.width=5, fig.height=3}
+
+# Get some text
+sum(ics.west$STR_DESTROYED_RES_TOTAL)
+sum(ics.conus$STR_DESTROYED_RES_TOTAL)
+
+## Group sum ics.west
+ics.west.yr <- ics.west %>% 
+  group_by(START_YEAR) %>%
+  summarize(destr_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
+  mutate(destr_res_c = cumsum(destr_res))
+
+# plot
+f3 <- ics.conus %>% as_tibble() %>%
+  group_by(START_YEAR) %>%
+  summarize(destr_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
+  mutate(destr_res_c = cumsum(destr_res)) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_area(aes(x=START_YEAR, y=destr_res_c), position='stack', fill="grey60") +
+  geom_line(data=ics.west.yr, aes(x=START_YEAR, y=destr_res_c, color="Western U.S."), position="stack",
+            linetype = 4, size = 1.05) +
+  scale_color_manual(name = "", values=c("Western U.S."="black")) +
+  scale_y_continuous(labels = scales::label_number(suffix = " K", scale = 1e-3)) + 
+  labs(x="Ignition Year", y="Structures Destroyed",
+       title="Cumulative homes destroyed by wildfire (1999-2020)\n")+
+  # annotation_custom(grob) +
+  theme_minimal() +
+  theme(legend.position=c(0.2, 1.1))
+
+f3
+
+ggsave(f3, file = "../../figs/Cumulative_HomeLoss_West_and_CONUS.png",
+       width=5, height=3, dpi = 300) # adjust dpi accordingly
+
+```
+
+Map of structures destroyed.
+
+```{r fig.height=5, fig.width=5}
+
+map1 <- ggplot() +
+  geom_sf(data=ics.conus%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
+  geom_sf(data=states, fill=NA, color="gray20") +
+  geom_sf(data=ics.conus%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
+          aes(color=STR_DESTROYED_RES_TOTAL, size=FINAL_ACRES), alpha=0.8) +
+  scale_size(range = c(1,6)) +
+  scale_color_viridis_c(option="inferno", trans="log10") +
+  labs(color = "Homes Destroyed") +
+  coord_sf(crs = st_crs(ics.conus)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6, ticks=F,
+                                 label.position = "right", title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),
+         size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(0.85, 0.7))
+
+map1
+
+ggsave(map1, file = paste("../../figs/Map1-ICS209-PLUS_HomesDestroyed_Size_CONUS.png", sep=""), 
+       width=5, height=5, dpi = 350) # adjust dpi accordingly
+
+```
+
 Plot cumulative structures destroyed from ICS-209-PLUS.
 
 ```{r warning=F, message=F, fig.width=5, fig.height=3}
@@ -224,7 +484,508 @@ ggsave(f1, file = paste("C:/Users/mccoo/OneDrive/mcook/ics209/", "SuppFigure_Str
        width=5, height=3, dpi = 700) # adjust dpi accordingly
 ```
 
-Isolate CO fires.
+## Changing human causes/consequences of fire
+
+
+Bring in the modified table.
+
+```{r include=F, warning=F}
+
+# subset latest release to West
+spatial.west <- spatial.conus %>% filter(STUSPS %in% west)
+
+ics.west_ <- as.data.frame(
+  readxl::read_excel("../../../earth-lab/projects/human-caused-fire-impacts/data/wf-incidents/ics209plus_wf_incidents_west_1999to2020_qc_PEH.xlsx"))
+
+```
+
+Compare the cause codes.
+
+```{r}
+
+
+```
+
+Comparison with MTBS 1999-2020.
+
+```{r}
+
+# bring in mtbs
+
+mtbs <- st_read("../../../data/mtbs/mtbs_perims_1984_2020/mtbs_perims_1984_2020_nad83.gpkg")
+
+# subset western states
+
+states.west <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_conus_nad83.gpkg")
+
+# isolate to western U.S.
+
+mtbs.west <- st_intersection(mtbs, states.west %>% dplyr::select(STUSPS), join=st_intersects, largest=T)
+
+st_write(mtbs.west,
+         "../../../data/mtbs/mtbs_perims_1984_2020/mtbs_perims_1984_2020_nad83_west.gpkg",
+         delete_dsn=TRUE)
+
+```
+
+Compare ICS209-PLUS burned area to MTBS.
+
+```{r}
+
+mtbs.west_ <- mtbs.west %>%
+  mutate(START_YEAR = lubridate::year(Ig_Date)) %>%
+  filter(START_YEAR >= 1999) %>%
+  group_by(START_YEAR) %>%
+  summarize(burned_area = sum(BurnBndAc))
+
+ics.west %>%
+  group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ggplot( aes( x=START_YEAR, y=burned_area ) ) +
+  geom_line( data=mtbs.west_, aes( x=START_YEAR, y=burned_area, color="Western U.S." ), 
+             position="stack", linetype = 6, size = 0.8 ) +
+  geom_point( data=mtbs.west_, aes( x=START_YEAR, y=burned_area ), 
+              shape=21, size = 1.75, color = "gray20", fill = "gray50" ) +
+  geom_line( ) +
+  geom_point( shape=21, size = 2.5, color = "gray20", fill = "red" ) +
+  scale_y_continuous( labels = scales::label_number(suffix = " M", scale = 1e-6) ) +
+  scale_x_continuous( limits=c(1999, 2020) ) +
+  scale_color_manual( name = "", values=c("Western U.S."="gray60") ) +
+  labs( x="\nIgnition Year", y="Burned Area (acres)\n", 
+        title="Conterminous U.S. burned area (1999-2020)\n" ) +
+  theme_minimal( ) +
+  theme( plot.title = element_text(size = 12, hjust=-0.4),
+        legend.position=c(0.2, 1.1) )
+
+```
+
+
+```{r fig.width=5, fig.height=3}
+
+# Group the western U.S. incidents
+ics.west.yr <- ics.west %>% 
+  group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup()
+
+# Grab the top 5
+top5 <- ics.west.yr %>% slice_max(burned_area, n=5)
+
+# Plot
+f1 <- ics.conus %>% group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup() %>%
+  ggplot(aes(x=START_YEAR, y=burned_area)) +
+  geom_line(data=ics.west.yr, aes(x=START_YEAR, y=burned_area, color="Western U.S."), position="stack",
+            linetype = 6, size = 0.8) +
+  geom_point(data=ics.west.yr, aes(x=START_YEAR, y=burned_area), 
+             shape=21, size = 1.75, color = "gray20", fill = "gray50") +
+  geom_text(data=. %>% filter(START_YEAR %in% top5$START_YEAR), 
+            aes(label=paste(round(burned_area / 1e6, 1), "M")),
+            position=position_nudge(x=-1.2,y=-10), size=3) +
+  geom_line() +
+  geom_point(shape=21, size = 2.5, color = "gray20", fill = "red") +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
+  scale_x_continuous(limits=c(1999, 2020)) +
+  scale_color_manual(name = "", values=c("Western U.S."="gray60")) +
+  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="Conterminous U.S. burned area (1999-2020)\n") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 12, hjust=-0.4),
+        legend.position=c(0.2, 1.1))
+
+f1
+
+ggsave(f1, file = "../../figs/ICS209-PLUS_BurnedArea_westANDconus.png",
+       width=5, height=3, dpi = 300) # adjust dpi accordingly
+
+rm(top5)
+
+```
+
+Plot destruction and area burned for the two decades (1999-2009, 2010-2020).
+
+```{r fig.height=7, fig.width=4}
+
+plasma_pal <- viridis::rocket(6)
+
+breaks = c(1,10,100,1000,10000)
+
+# 2001 to 2010
+
+df <- ics.west %>% filter(START_YEAR <= 2009) %>%
+  st_transform(st_crs(4326))
+
+m1 <- ggplot() +
+  geom_sf(data=df %>% filter(STR_DESTROYED_TOTAL==0), color="gray70", size=0.3, alpha=0.9) +
+  geom_sf(data=states.west, fill=NA, color="gray10") +
+  geom_sf(data=df %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.75) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  scale_color_gradientn(trans = "log10", breaks = breaks, labels = breaks, guide = "color",
+                        colors = viridis_pal(begin=0.85, end=0.2, option="rocket")(3)) +
+  labs(color = "Structures Destroyed",
+       title="1999-2009") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),
+         size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+## 2010-2020
+
+df <- ics.west %>% filter(START_YEAR > 2009) %>%
+  st_transform(st_crs(4326))
+
+m2 <- ggplot() +
+  geom_sf(data=df %>% filter(STR_DESTROYED_TOTAL==0), color="gray70", size=0.3, alpha=0.9) +
+  geom_sf(data=states.west, fill=NA, color="gray10") +
+  geom_sf(data=df %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.75) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  scale_color_gradientn(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                        colors = viridis_pal(begin=0.85, end=0.2, option="rocket")(3)) +
+  labs(color = "Structures Destroyed",
+       title="2010-2020") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+########### Arrange
+arr <- ggarrange(m1,m2, nrow=2, ncol=1, common.legend = TRUE, legend = "left")
+
+arr
+
+ggsave(arr, file = paste("../../ICS209-PLUS_Westwide_Decadal_HomeLoss_2panel.png", sep=""), 
+       width=4, height=7, dpi = 500, bg="white") # adjust dpi accordingly
+
+rm(df, arr)
+
+```
+
+4-panel plot by cause code. Version 1.
+
+```{r  fig.height=7.25, fig.width=7.5}
+
+# low = "#c6dbef", high="#084594" lightning
+# low = "#fcbba1", high="#99000d" human
+
+breaks = c(1,10,100,1000,10000)
+
+states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_conus.gpkg") %>%
+        st_transform(crs=st_crs(spatial.conus))
+
+########### 1999-2009, human caused
+
+df1 <- spatial.west %>% 
+  filter(START_YEAR <= 2009,
+         CAUSE_UPDATED == "H") %>%
+  st_transform(st_crs(4326))
+
+m3 <- ggplot() +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#fcbba1", high="#99000d") +
+  labs(color = "Structures Destroyed",
+       title="1999-2009 (Human-related)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),
+         size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+
+########### 1999 to 2009, lightning
+
+df2 <- spatial.west %>% 
+  filter(START_YEAR <= 2009,
+         CAUSE_UPDATED == "L") %>%
+  st_transform(st_crs(4326))
+
+m4 <- ggplot() +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  # scale_color_gradientn(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+  #                       colors = viridis_pal(begin=0.85, end=0.2, option="rocket")(3)) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#c6dbef", high="#084594", 
+                       limits=c(min(df1$STR_DESTROYED_TOTAL)+1, max(df1$STR_DESTROYED_TOTAL))) +
+  labs(color = "Structures Destroyed",
+       title="1999-2009 (Lightning)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+
+
+########### 2010-2020, human
+
+df1 <- spatial.west %>% 
+  filter(START_YEAR > 2009,
+         CAUSE_UPDATED == "H") %>%
+  st_transform(st_crs(4326))
+
+m5 <- ggplot() +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#fcbba1", high="#99000d") +
+  labs(color = "Structures Destroyed",
+       title="2010-2020 (Human-related)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+
+
+########### 2010-2020, lightning
+
+df2 <- spatial.west %>% 
+  filter(START_YEAR > 2009,
+         CAUSE_UPDATED == "L") %>%
+  st_transform(st_crs(4326))
+
+m6 <- ggplot() +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  # scale_color_gradientn(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+  #                       colors = viridis_pal(begin=0.85, end=0.2, option="rocket")(3)) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#c6dbef", high="#084594", 
+                       limits=c(min(df1$STR_DESTROYED_TOTAL)+1, max(df1$STR_DESTROYED_TOTAL))) +
+  labs(color = "Structures Destroyed",
+       title="2010-2020 (Lightning)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8))) +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+########### Arrange
+arr <- ggarrange(ggarrange(m3,m5,common.legend=TRUE,legend="left")+theme(plot.margin=margin(0.1,0.1,1.25,0.1)), 
+                 ggarrange(m4,m6,common.legend=TRUE,legend="left")+theme(plot.margin=margin(1.25,0.1,0.1,0.1)), 
+                 nrow=2, ncol=1) +
+  theme(plot.margin = margin(1,0.1,1,0.1, "cm")) 
+
+arr
+
+ggsave(arr, file = paste("../../ICS209-PLUS_Westwide_Decadal_HomeLoss_4panel.png", sep=""), 
+       width=7.5, height=7, dpi = 500, bg="white") # adjust dpi accordingly
+
+rm(df1, df2, arr)
+
+```
+
+4-panel plot by cause code. Version 2.
+
+```{r  fig.height=7.25, fig.width=7.5}
+
+# low = "#c6dbef", high="#084594" lightning
+# low = "#fcbba1", high="#99000d" human
+
+breaks = c(1,10,100,1000,10000)
+
+states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_conus.gpkg") %>%
+        st_transform(crs=st_crs(spatial.conus))
+
+########### 1999-2009, human caused
+
+df1 <- spatial.west %>% 
+  filter(START_YEAR <= 2009,
+         CAUSE_UPDATED == "H") %>%
+  st_transform(st_crs(4326))
+
+m3 <- ggplot() +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#fcbba1", high="#99000d") +
+  labs(color = "Structures Destroyed",
+       title="1999-2009 (Human-related)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),
+         size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+
+########### 1999 to 2009, lightning
+
+df2 <- spatial.west %>% 
+  filter(START_YEAR <= 2009,
+         CAUSE_UPDATED == "L") %>%
+  st_transform(st_crs(4326))
+
+m4 <- ggplot() +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  # scale_color_gradientn(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+  #                       colors = viridis_pal(begin=0.85, end=0.2, option="rocket")(3)) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#c6dbef", high="#084594", 
+                       limits=c(min(df1$STR_DESTROYED_TOTAL)+1, max(df1$STR_DESTROYED_TOTAL))) +
+  labs(color = "Structures Destroyed",
+       title="1999-2009 (Lightning)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+
+
+########### 2010-2020, human
+
+df1 <- spatial.west %>% 
+  filter(START_YEAR > 2009,
+         CAUSE_UPDATED == "H") %>%
+  st_transform(st_crs(4326))
+
+m5 <- ggplot() +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df1 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#fcbba1", high="#99000d") +
+  labs(color = "Structures Destroyed",
+       title="2010-2020 (Human-related)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+
+
+########### 2010-2020, lightning
+
+df2 <- spatial.west %>% 
+  filter(START_YEAR > 2009,
+         CAUSE_UPDATED == "L") %>%
+  st_transform(st_crs(4326))
+
+m6 <- ggplot() +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL==0), aes(size=FINAL_ACRES), color="gray80", alpha=0.4) +
+  scale_size(range = c(1,6)) +
+  geom_sf(data=states%>%filter(STUSPS %in% west), fill=NA, color="gray10") +
+  geom_sf(data=df2 %>% filter(STR_DESTROYED_TOTAL>0)%>%arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.9) +
+  scale_size(range = c(1,6)) +
+  # scale_color_viridis_c(option="plasma", trans="log10") +
+  # scale_color_gradient(trans = "log", labels = breaks) +
+  # scale_color_gradientn(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+  #                       colors = viridis_pal(begin=0.85, end=0.2, option="rocket")(3)) +
+  scale_color_gradient(trans = "log10", breaks = breaks, labels = breaks, guide="color",
+                       low = "#c6dbef", high="#084594", 
+                       limits=c(min(df1$STR_DESTROYED_TOTAL)+1, max(df1$STR_DESTROYED_TOTAL))) +
+  labs(color = "Structures Destroyed",
+       title="2010-2020 (Lightning)") +
+  coord_sf(crs = st_crs(4326)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6.5, ticks=F,
+                                 title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8))) +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(1.1, 0.75))
+
+
+########### Arrange
+arr <- ggarrange(ggarrange(m3,m5,common.legend=TRUE,legend="left")+theme(plot.margin=margin(0.1,0.1,1.25,0.1)), 
+                 ggarrange(m4,m6,common.legend=TRUE,legend="left")+theme(plot.margin=margin(1.25,0.1,0.1,0.1)), 
+                 nrow=2, ncol=1) +
+  theme(plot.margin = margin(1,0.1,1,0.1, "cm")) 
+
+arr
+
+ggsave(arr, file = paste("../../ICS209-PLUS_Westwide_Decadal_HomeLoss_4panel_v2.png", sep=""), 
+       width=7.5, height=7, dpi = 500, bg="white") # adjust dpi accordingly
+
+rm(df1, df2, arr)
+
+```
+
+
+## ICS+FIRED 
+## Colorado-specific plots
 
 ```{r}
 ics.co <- ics.west %>% filter(STUSPS == 'CO')
@@ -482,5 +1243,12 @@ f7 <- tmp1 %>%
 f7
 ggsave(f7, file = paste("C:/Users/mccoo/OneDrive/mcook/ics209/figs/", "CO_BurnedArea_1984to2021_wRES.png", sep=""), 
        width=5, height=3, dpi = 700) # adjust dpi accordingly
+```
+
+
+```{r}
+
+
+
 ```
 

@@ -3,767 +3,822 @@ title: "ics+fired"
 output: html_document
 ---
 
-# Linking ICS-209-PLUS to FIRED (ICS+FIRED)
+# ICS + FIRED: Linking incident command reports with satellite-derived fire events
 
 ```{r setup, include=F, echo=F, warning=F, error=F}
-# rm(list = ls())
+rm(list = ls())
 knitr::opts_chunk$set(echo = TRUE)
 source("setup.R")
 ```
 
-```{r}
-# Grab a glimpse of the data
-glimpse(ics.conus)
+First, we create a spatial SF points object from the Point of Origin (POO) coordinates.
+
+```{r warning=F}
+
+# incident.pts <- incidents %>%
+#  rename(GID='...1') %>%
+#  mutate(POO_LONGITUDE = if_else(is.na(POO_LONGITUDE), LRGST_FOD_LONGITUDE, POO_LONGITUDE),
+#         POO_LATITUDE = if_else(is.na(POO_LATITUDE), LRGST_FOD_LATITUDE, POO_LATITUDE)) %>%
+#  # remove rows with missing coordinates
+#  filter(!is.na(POO_LONGITUDE)) %>%
+#  # convert to spatial object
+#  st_as_sf(coords=c("POO_LONGITUDE", "POO_LATITUDE"),crs=wgs.prj) %>%
+#  # retain coordinates
+#  mutate(POO_LONGITUDE = unlist(map(.$geometry,1)),
+#         POO_LATITUDE = unlist(map(.$geometry,2))) %>%
+#  # ensure transformation to WGS
+#  st_set_crs(st_crs(wgs.prj)) %>%
+#  # perform an intersection with our states (removing invalid points)
+#  st_intersection(., states%>%dplyr::select(STUSPS)) %>%
+#  # cast to point
+#  st_cast("POINT") %>%
+#  st_transform(st_crs(lambert.prj))
+# # Write
+# st_write(incident.pts,
+#          "../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg",
+#          driver="GPKG",delete_dsn=T)
+
 ```
 
-In CONUS, there were 61,097 homes destroyed across 2,360 wildfire incidents representing 7.19% of total wildfire incidents during this time period (1999-2020). In the western U.S., 52,119 homes were lost to wildfire in just 1,007 individual incidents. This represents only 6.7% of west-wide incidents. Wildfire in the west accounts for 85.3% of home loss (1999-2020) across just 3.1% of wildfire incidents.
+```{r warning=F}
 
-```{r}
-paste("Num. of homes destroyed by wildfire (CONUS): ", 
-      as.integer(sum(ics.conus$STR_DESTROYED_RES_TOTAL)))
-paste("Num. of destructive incidents (CONUS): ", 
-      dim(ics.conus %>% filter(STR_DESTROYED_RES_TOTAL > 0))[1], sep="")
-paste("Num. of homes destroyed by wildfire (WEST): ", sum(ics.west$STR_DESTROYED_RES_TOTAL))
-paste("Num. of destructive incidents (WEST): ", 
-      dim(ics.west %>% filter(STR_DESTROYED_RES_TOTAL > 0))[1], sep="")
-paste("Percentage destroyed homes in the West: ",
-      round(sum(ics.west$STR_DESTROYED_RES_TOTAL)/sum(ics.conus$STR_DESTROYED_RES_TOTAL) * 100, 2), sep="")
-```
+# Load the spatial points
+incident.pts <- st_read("../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg") %>%
+ # Filter 2001-2020 to match FIRED
+ filter(START_YEAR>=2001) %>%
+ # Remove some known "problem fires"
+ filter(INCIDENT_ID != "2017_7211255_REDWOOD VALLEY INCIDENT",
+        INCIDENT_ID != "2017_7293073_REDWOOD VALLEY INCIDENT") %>%
+ # Make sure there are no duplicate records
+ distinct(., INCIDENT_ID, .keep_all=TRUE)
 
-Plot destruction by state.
-
-```{r fig.width=4, fig.height=2.5}
-# Group summary by state
-state.sum <- ics.conus %>% as_tibble() %>%
-  filter(STR_DESTROYED_RES_TOTAL > 0) %>%
-  group_by(STUSPS) %>%
-  summarize(str_des_res = sum(STR_DESTROYED_RES_TOTAL)) %>%
-  inner_join(states%>%as_tibble(), ., by="STUSPS") %>%
-  st_as_sf() 
-  # Plot
+# plot an example (Colorado)
 ggplot() +
-  geom_sf(data=state.sum, aes(fill=str_des_res)) +
-  scale_fill_viridis_c(option="magma", trans="log10") +
-  guides(fill="none") +
-  theme_void()
-rm(state.sum)
+ geom_sf(data=incident.pts %>% filter(STUSPS=="CO") %>% arrange(FINAL_ACRES), 
+         aes(color=FINAL_ACRES, size=FINAL_ACRES)) +
+ viridis::scale_color_viridis(option="inferno",trans="log10") +
+ scale_size(range = c(0.5,8)) +
+ geom_sf(data=states %>% filter(STUSPS=="CO"), fill=NA) +
+ coord_sf(crs=lambert.prj) +
+ theme_minimal() +
+ labs(color="Final Acres") +
+ guides(color = guide_colourbar(title.position="top", barwidth = 10, barheight = 0.8, ticks=F,
+                                label.theme = element_text(angle = 0, size = 8)),
+        size="none") +
+ theme(legend.position = "top")
+
 ```
 
-Texas and Oklahoma account for a large percentage of home loss. Tennessee is also in the top 15 most destructive states. By including TX and OK in the analysis we can capture 93% of all wildfire-related home loss and 91% of total burned area from the incident command reports. 
+## Single-fire events co-occurring with MTBS and FIRED perimeters (high confidence joins)
+
+Now, we create a subset of wildfires that were not managed as complex incidents. We can do this by cross-checking against the complex associations table. We can also remove any rows where the FPA FOD indicates multiple fires, regardless of whether they were managed as complexes in ICS209s (keeping NULL values).
+
+Join these records to MTBS perimeters, where possible. Keep only unique rows (i.e., remove rows where the MTBS perimeter is duplicated) and where the difference in recorded burn acres is less than 30,000. This ensure we are retaining only "high-confidence" joins. 
 
 ```{r}
-west.plus <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT", "TX", "OK")
-ics.west.plus <- ics.conus %>% filter(STUSPS %in% west.plus)
-## Subset FIRED as well
-fired.west.plus <- fired.conus %>% filter(STUSPS %in% west.plus)
-## Homes destroyed
-print("Homes destroyed: ...")
-sum(ics.west$STR_DESTROYED_RES_TOTAL) / sum(ics.conus$STR_DESTROYED_RES_TOTAL) * 100
-sum(ics.west.plus$STR_DESTROYED_RES_TOTAL)
-sum(ics.west.plus$STR_DESTROYED_RES_TOTAL) / sum(ics.conus$STR_DESTROYED_RES_TOTAL) * 100
-## Burned area
-print("Burned area (acres): ...")
-sum(ics.west$FINAL_ACRES) / sum(ics.conus$FINAL_ACRES) * 100
-sum(ics.west.plus$FINAL_ACRES)
-sum(ics.west.plus$FINAL_ACRES) / sum(ics.conus$FINAL_ACRES) * 100
+
+# Isolate incidents which were not managed as complexes
+no.cmplx <- incident.pts %>% 
+ # Filter incidents with 0 acres
+ filter(FINAL_ACRES!=0,
+        # remove incidents found in the complex associations table
+        !INCIDENT_ID %in% complex$MEMBER_INCIDENT_ID,
+        !INCIDENT_ID %in% cmplx14$MEMBER_INCIDENT_ID,
+        # filter to fires where FPA-FOD shows 1 event or NULL
+        FOD_FIRE_NUM==1 | is.na(FOD_FIRE_NUM))
+
+# print the summary to make sure it worked
+summary(no.cmplx$FOD_FIRE_NUM)
+# check how many have MTBS ID
+dim(no.cmplx%>%filter(!is.na(LRGST_MTBS_FIRE_INFO)))[1]
+
+# clean the MTBS field
+no.cmplx <- no.cmplx %>%
+  mutate(Event_ID = gsub("\\s*\\([^\\)]+\\)","",
+                         LRGST_MTBS_FIRE_INFO))
+
 ```
+
+Now join the ICS209s to their MTBS perimeter. Filter by size/date to remove obvious issues.
 
 ```{r}
-paste("Num. of homes destroyed by wildfire (CONUS): ", 
-      as.integer(sum(ics.conus$STR_DESTROYED_RES_TOTAL)))
-paste("Num. of destructive incidents (CONUS): ", 
-      dim(ics.conus %>% filter(STR_DESTROYED_RES_TOTAL > 0))[1], sep="")
-paste("Num. of homes destroyed by wildfire (WEST): ", sum(ics.west.plus$STR_DESTROYED_RES_TOTAL))
-paste("Num. of destructive incidents (WEST): ", 
-      dim(ics.west.plus %>% filter(STR_DESTROYED_RES_TOTAL > 0))[1], sep="")
-paste("Percentage destroyed homes in the West: ",
-      round(sum(ics.west.plus$STR_DESTROYED_RES_TOTAL)/sum(ics.conus$STR_DESTROYED_RES_TOTAL) * 100, 2), sep="")
+# Make sure CRS matches
+mtbs <- mtbs %>% st_transform(st_crs(lambert.prj))
+no.cmplx <- no.cmplx %>% st_transform(st_crs(lambert.prj))
+
+# Join by "Event_ID"
+mtbs.inci <- inner_join(
+ no.cmplx %>% as_tibble() %>% dplyr::select(-geom),
+ mtbs %>% as_tibble(), by="Event_ID"
+) %>%
+ # Handle duplicate MTBS perims
+ distinct(Event_ID, .keep_all=T) %>%
+ mutate(MTBS_ACRE_DIFF = abs(FINAL_ACRES - BurnBndAc),
+        MTBS_PERC_DIFF = abs((FINAL_ACRES - BurnBndAc)/BurnBndAc) * 100,
+        MTBS_DATE_DIFF = (abs(as.numeric(difftime(DISCOVERY_DATE, MTBS_Ig_Date, units = "days"))))) %>%
+ # Remove joins if the acre difference is > 50,000 and ignition date difference is greater 31 days
+ # Not exhaustive but handles some of the most glaring issues
+ filter(MTBS_DATE_DIFF < 32,
+        MTBS_ACRE_DIFF < 50000 | MTBS_PERC_DIFF < 50) %>%
+ # Now cast back to multipolygon
+ st_as_sf() %>%
+ st_transform(lambert.prj) %>%
+ st_make_valid() %>%
+ st_cast("MULTIPOLYGON")
+
+# Check the histogram of acre difference
+summary(mtbs.inci$MTBS_ACRE_DIFF)
+ggplot(data=mtbs.inci, aes(x=MTBS_ACRE_DIFF)) + 
+ geom_histogram(bins=10,binwidth=1000)
+
+# write this file out
+st_write(mtbs.inci, "../../data/spatial/mod/ICS_PLUS_FIRED/mtbs_perims_w_incidents.gpkg", delete_dsn=T)
+
 ```
 
-Map structures destroyed and burned area.
-
-```{r fig.height=5, fig.width=5}
-map1 <- ggplot() +
-  geom_sf(data=ics.west.plus%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
-  geom_sf(data=states%>%filter(STUSPS %in% states.sub), fill=NA, color="gray20") +
-  geom_sf(data=ics.west.plus%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
-          aes(color=STR_DESTROYED_RES_TOTAL, size=FINAL_ACRES), alpha=0.8) +
-  scale_size(range = c(1,6)) +
-  scale_color_viridis_c(option="inferno", trans="log10") +
-  labs(color = "Homes Destroyed") +
-  coord_sf(crs = st_crs(ics.conus)) +
-  theme_void() +
-  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6, ticks=F,
-                                 label.position = "right", title.position = "left",
-                                 label.theme = element_text(angle = 0, size = 8)),
-         size="none") +
-  theme(legend.title = element_text(angle = 90, size=10),
-        legend.position=c(0.85, 0.7))
-map1
-ggsave(map1, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_WestPlus.png", sep=""), 
-       width=5, height=5, dpi = 350) # adjust dpi accordingly
-rm(map1)
-```
-
-Homes destroyed by incident.
-
-```{r fig.width=4, fig.height=2.5, warning=F}
-## reorder factors
-ics.west.plus$INCIDENT_NAME <- 
-  reorder(ics.west.plus$INCIDENT_NAME, ics.west.plus$STR_DESTROYED_RES_TOTAL)
-ics.west.plus$INCIDENT_NAME <- 
-  factor(ics.west.plus$INCIDENT_NAME, levels=rev(levels(ics.west.plus$INCIDENT_NAME)))
-# Grab the top 15
-top5 <- ics.west.plus %>% slice_max(STR_DESTROYED_RES_TOTAL, n=5)
-# Plot and label
-f1 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL, 
-                                     group=factor(INCIDENT_NAME), 
-                                     fill=STR_DESTROYED_RES_TOTAL), color="grey90") +
-  geom_bar(stat="identity", position='stack') +
-  scale_fill_viridis_c(option="inferno", trans="log10") +
-  labs(
-    x="", y="Homes Destroyed\n", fill="") +
-  # title="Homes destroyed by Western wildfires (1999-2020)\n",
-  # caption="Maxwell C. Cook, PhD Student, Department of Geography,
-  # University of Colorado, Boulder\nData source: St. Denis et al., 2020 (updated)") +
-  # ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top5$INCIDENT_ID),
-  #                          aes(label=INCIDENT_NAME), position=position_dodge(0.5), size = 2) +
-  theme_minimal() +
-  theme(plot.title = element_text(size = 9),
-        plot.subtitle = element_text(size=7),
-        plot.caption = element_text(size=6),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8),
-        axis.text.y = element_text(size=7),
-        axis.text.x = element_text(size=7),
-        legend.position="none")
-f1
-ggsave(f1, file = "../../figs/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png",
-       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
-rm(top5)
-rm(f1)
-```
-
-Burned area (option 1).
-
-```{r fig.width=4, fig.height=2.5, warning=F}
-## reorder factors
-ics.west.plus$INCIDENT_NAME <- 
-  reorder(ics.west.plus$INCIDENT_NAME, ics.west.plus$FINAL_ACRES)
-ics.west.plus$INCIDENT_NAME <- 
-  factor(ics.west.plus$INCIDENT_NAME, levels=rev(levels(ics.west.plus$INCIDENT_NAME)))
-## Plot it
-f2 <- ggplot(data=ics.west.plus, aes(x=START_YEAR, y=FINAL_ACRES, 
-                                     group=factor(INCIDENT_NAME), 
-                                     fill=FINAL_ACRES), color="black") +
-  geom_bar(stat='identity', position="stack") +
-  scale_fill_viridis_c(option="rocket", trans="sqrt") +
-  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
-  theme_minimal() +
-  labs(x="", y="Burned Area (acres)") +
-  theme(plot.title = element_text(size = 9),
-        plot.subtitle = element_text(size=7),
-        plot.caption = element_text(size=6),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8),
-        axis.text.y = element_text(size=7),
-        axis.text.x = element_text(size=7),
-        legend.position="none")
-f2
-ggsave(f2, file = "../../figs/Westwide-PLUS_BurnedArea_byIncident_1999to2020.png",
-       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
-rm(f2)
-```
-
-Burned area (Option 2).
-
-```{r fig.width=4, fig.height=2.5, warning=F}
-## Plot
-f3 <- ics.west.plus %>% group_by(START_YEAR) %>%
-  summarize(burned_area = sum(FINAL_ACRES)) %>%
-  ungroup() %>%
-  ggplot(aes(x=START_YEAR, y=burned_area)) +
-  geom_line() +
-  geom_point(aes(size=burned_area, fill=burned_area), shape=21, color = "gray20") +
-  scale_fill_viridis_c(option="rocket", trans="sqrt") +
-  scale_size(1,5) +
-  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
-  scale_x_continuous(limits=c(1999, 2020)) +
-  coord_cartesian(clip = "off") +
-  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="") +
-  theme_minimal() +
-  theme(plot.title = element_text(size = 9),
-        plot.subtitle = element_text(size=7),
-        plot.caption = element_text(size=6),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8),
-        axis.text.y = element_text(size=7),
-        axis.text.x = element_text(size=7),
-        legend.position="none")
-f3
-ggsave(f3, file = "../../figs/Westwide-PLUS_BurnedArea_1999to2020.png",
-       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
-rm(f3)
-```
-
-Arrange a figure. 
-
-```{r fig.height=5, fig.width=7.5, warning=F}
-arr1 <- ggarrange(ggarrange(f1, f3, nrow=2, ncol=1, align="v"), 
-                  map1, ncol=2, nrow=1, align="h")
-# arr1 <- annotate_figure(
-#   arr1, bottom = text_grob("Data Source: St. Denis et al. (2020), updated", 
-#                            face="italic", color = "black",
-#                            hjust = 1, x = 1, size = 8))
-arr1
-ggsave(arr1, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020.png",
-       width=7.5, height=5, dpi = 300) # adjust dpi accordingly
-rm(arr1)
-```
-
-# Joining ICS-209-PLUS with FIRED (ICS+FIRED) (WEST-WIDE)
-
-Read in the add-in records and tidy.
-
-```{r}
-addin <- read.csv("../../data/tabular/mod/wf-incidents/ics-fired_incident_addin.csv") %>%
-  mutate_at(vars(contains("_DATE")), as.Date, '%m/%d/%Y') %>%
-  rename(X = ï..X) %>%
-  mutate(EVACUATION_REPORTED = as.character(EVACUATION_REPORTED),
-         COMPLEX = as.character(COMPLEX)) %>%
-  st_as_sf(., coords=c("LONGITUDE", "LATITUDE"), na.fail=TRUE) %>%
-  st_set_crs(st_crs(4326)) %>%
-  mutate(LONGITUDE = unlist(map(.$geometry,1)),
-         LATITUDE = unlist(map(.$geometry,2))) %>%
-  rename(geom = geometry) %>%
-  st_transform(., crs=st_crs(ics.west.plus))
-# Handle incidents which have been rolled into one report manually
-ics.west.plus <- ics.west.plus %>%
-  filter(
-    !INCIDENT_ID == "2020_11903764_WHITNEY", 
-    !INCIDENT_ID == "2020_11902323_PEARL HILL",
-    !INCIDENT_ID == "2020_11901760_COLD SPRINGS", 
-    !INCIDENT_ID == "2018_9053386_HIRZ",
-    !INCIDENT_ID == "2018_9096853_DELTA",
-    !INCIDENT_ID == "2012_WA-OWF-000610_OKANOGAN COMPLEX") %>%
-  bind_rows(., addin)
-rm(addin)
-```
-
-By spatial buffer overlap.
+Now find co-occurring FIRED events using MTBS perimeters. Do this for events with high-confidence MTBS join (i.e., same incident name and no duplicate records). Also, use the largest overlap and perform the join by fire year to try and find the most likely event.
 
 ```{r warning=F}
-## Remove or fill records reporting 0 acres (likely erroneous)
-## Try filling with FOD first
-ics.west.plus <- ics.west.plus %>% 
-  mutate(FINAL_ACRES = if_else(FINAL_ACRES==0 & !is.na(FOD_FINAL_ACRES), FOD_FINAL_ACRES, FINAL_ACRES)) %>%
-  filter(FINAL_ACRES != 0,
-         FINAL_KM2 != 0,
-         START_YEAR >= 2001,
-         !is.na(DISCOVERY_DATE))
-## Buffer incident points by generous 50km
-ics.buffer <- st_buffer(ics.west.plus, 50000)
-## Join to any overlapping FIRED perimeters
-buffer.join <- st_join(fired.west.plus, ics.buffer, join=st_intersects)
-rm(ics.buffer)
+
+# Set the geometries
+st_agr(events) <- "constant"
+st_agr(mtbs.inci) <- "constant"
+
+# Set CRS and cast to be explicit
+events <- events %>%
+ st_transform(st_crs(lambert.prj)) %>%
+ st_make_valid() %>%
+ st_cast("MULTIPOLYGON")
+
+# Loop through years, perform spatial join w/ largest overlap
+join = c()
+years = seq(2001,2020,1)
+for (y in 1:length(years)){
+ print(years[y])
+ a <- events[events$ig_year == years[y],]
+ st_agr(a) = "constant"
+ b <- mtbs.inci[mtbs.inci$START_YEAR == years[y],]
+ st_agr(b) = "constant"
+ join[[y]] <- st_join(b,a,join=st_intersects,largest=TRUE,left=FALSE)
+}
+
+# Merge the list of lists
+df <- bind_rows(join) %>%
+ # remove rows without a join
+ filter(!is.na(id)) %>%
+ mutate(tot_ar_ac = tot_ar_km2*247.105,
+        FIRED_ACRE_DIFF = abs(BurnBndAc-tot_ar_ac),
+        FIRED_DATE_DIFF = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days")))),
+        FIRED_PERC_DIFF = abs((tot_ar_ac - BurnBndAc)/BurnBndAc) * 100) %>%
+ # Create simple data frame
+ as_tibble() %>%
+ dplyr::select(-geom)
+
+# Any duplicate FIRED IDs?
+if(dim(df %>% group_by(id) %>% filter(n()>1))[1] > 1 |
+   dim(df %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1] > 1){
+ print("Duplicate IDs found on first pass")
+} else (print("No duplicate IDs on first pass"))
+
+########################################
+
+# Check the histogram of acre difference
+summary(df$FIRED_ACRE_DIFF)
+ggplot(data=df, aes(x=FIRED_ACRE_DIFF)) + 
+ geom_histogram(bins=10,binwidth=10000)
+
+# Check the histogram of date difference
+summary(df$FIRED_DATE_DIFF)
+ggplot(data=df, aes(x=FIRED_DATE_DIFF))+
+ geom_histogram(bins=10,binwidth=10)
+
+########################################
+
+# Filter out the most glaring issues 
+# (acre difference > 50,000, date difference > 25 days)
+# 96% of records are within 25 days
+# Keep only distinct matches
+df <- df %>% 
+ filter(FIRED_DATE_DIFF <= 25,
+        FIRED_ACRE_DIFF < 50000 | FIRED_PERC_DIFF < 50) %>%
+ group_by(id) %>%
+ # If there are duplicates, take the nearest in size
+ slice(which.min(FIRED_PERC_DIFF)) %>%
+ ungroup() %>%
+ # Keep distinct
+ distinct(., id, .keep_all = TRUE)
+
+# Any duplicate FIRED IDs?
+if(dim(df %>% group_by(id) %>% filter(n()>1))[1] > 1 |
+   dim(df %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1] > 1){
+ print("Duplicate IDs found on second pass")
+} else (print("No duplicate IDs on second pass"))
+
+# Grab a summary of the difference fields
+summary(df$FIRED_ACRE_DIFF)
+summary(df$FIRED_DATE_DIFF)
+
+# Now, Isolate the FIRED events, create cleaned table,export
+# Add in the FIRED_ID and other fields to the ICS-209s
+events.ics <- events %>% 
+ as_tibble() %>%
+ dplyr::select(id,geom) %>%
+ filter(id %in% df$id) %>%
+ inner_join(.,df,by="id") %>%
+ rename(FIRED_ID = id) %>%
+ # Now cast back to multipolygon
+ st_as_sf() %>%
+ st_transform(lambert.prj) %>%
+ st_make_valid() %>%
+ st_cast("MULTIPOLYGON")
+
+dim(events.ics %>% group_by(FIRED_ID) %>% filter(n()>1))[1]
+dim(events.ics %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+
+# Need to double check column names for exporting
+if(any(duplicated(toupper(names(events.ics))))){
+ print(which(duplicated(toupper(names(events.ics)))))
+} else {
+ print("Column names OK")
+}
+
+# Write to file
+st_write(events.ics,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_mtbs.gpkg",delete_dsn=TRUE)
+
+# Tidy up
+rm(mtbs,df,a,b,join)
+# abs((264155 - 348772)/348772) * 100
 ```
 
-A 50km buffer join to all events yields over two million records. Start filtering them down by attributes.
-
-Ignition date filters ...
+Some "validation". Run an LM and check on r2 between ICS and FIRED acres.
 
 ```{r}
-## By DOY
-doy.filter <- buffer.join %>% 
-  mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
-  filter(START_YEAR == ig_year & doy_diff <= 20)
-dim(doy.filter)[1]
-rm(buffer.join)
+
+# Create a LM to show the relationship between ICS and FIRED acres
+lm.fit <- lm(FINAL_ACRES ~ tot_ar_ac, data=events.ics)
+r2 = round(summary(lm.fit)$r.squared, 2)
+summary(lm.fit)
+print("~~~~~~~~~")
+
+# Predict
+pred <- predict(lm.fit, interval="confidence")
+pred <- cbind(events.ics,pred)
+ggplot(data=pred, aes(x=tot_ar_ac,y=FINAL_ACRES)) +
+ geom_point() +
+ geom_ribbon(aes(ymin=lwr,ymax=upr),alpha=0.15)+
+ geom_line(aes(y=fit),size=1)+
+ labs(title="Relationship b/w ICS and FIRED Acres \n(MTBS-based Join)",
+      subtitle=paste0("R-sq: ",r2),
+      x="FIRED Acres",y="ICS Acres")
+rm(r2,lm.fit)
+
 ```
 
-Fire size filters ...
+Look at the average distance between incident POO and FIRED centroid.
 
 ```{r}
-area.filter <- doy.filter %>% 
-  mutate(ar_abs_dif = abs(tot_ar_km2 - FINAL_KM2),
-         ar_chg_dif = abs((tot_ar_km2 - FINAL_KM2)/FINAL_KM2) * 100) %>%
-  group_by(INCIDENT_ID) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup()
-dim(area.filter)[1]
+
+library(nngeo, quietly=T)
+
+centroid <- events %>%
+ filter(id %in% events.ics$FIRED_ID) %>% 
+ st_centroid() %>%
+ st_transform(st_crs(lambert.prj))
+
+pts <- incident.pts%>%filter(INCIDENT_ID %in% events.ics$INCIDENT_ID)
+
+nn <- st_nn(pts, centroid, k=1, returnDist = T)
+
+nn.df <- as.matrix(nn$dist)
+head(nn.df)
+nn.df <- as.data.frame(nn.df)%>%
+ mutate(V1 = as.numeric(V1))
+print("~~~~~~")
+paste0("Mean Distance: ", round(mean(nn.df$V1),2)," meters")
+paste0("Standard Deviation Distance: ", round(sd(nn.df$V1),2))
+
+rm(centroid,pts,nn,nn.df)
+
 ```
 
-Now double check on how many duplicates we still have.
+## Linking incident command report to FIRED using buffer around POO coordinates and spatial/temporal filters.
+
+The average distance between the incident POO and the centroid of the FIRED event in our first round is 3.6km with high variability (stdev = 4.6km). This is a decent sample because the joins are high-confidence.
+
+Work with complex fires first: Starting with a 20km buffer around incident POO, identify all FIRED events within the buffer and then slice the data frame to find rows where the ignition dates are within 25 days.
+
+First, do some cleaning. Isolate complex fires, handle manual edits.
 
 ```{r}
-dim(area.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(area.filter %>% group_by(id) %>% filter(n()>1))[1]
-## Check for just destructive events
-print("For destructive incidents (Homes Destroyed > 0): ...")
-dim(area.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(area.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(id)%>%filter(n()>1))[1]
-## And by fire size
-print("For burned area (acres > 1000): ...")
-dim(area.filter%>%filter(FINAL_ACRES>1000)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(area.filter%>%filter(FINAL_ACRES>1000)%>%group_by(id)%>%filter(n()>1))[1]
+
+# Isolate complex fires
+# Handle some of the known "duplicates"
+
+# Read in the updated complex assoc. table (2014-2020)
+# Retrieve only the complex INCIDENT_ID from the spatial points
+cmplx14 <- cmplx14 %>%
+ # Remove "problem" fires if known
+ filter(MEMBER_INCIDENT_ID != "2017_7211255_REDWOOD VALLEY INCIDENT")
+
+# Merge 1999-2013 and 2014-2020 complex records
+cmplx1 <- incident.pts %>%
+ filter(INCIDENT_ID %in% cmplx14$CPLX_INCIDENT_ID)
+cmplx2 <- incident.pts %>%
+ filter(START_YEAR<2014, 
+        INCIDENT_ID %in% complex$CPLX_INCIDENT_ID)
+
+# Bind them together
+cmplx3 <- bind_rows(cmplx1,cmplx2)
+
+# Also add in fires where FOD_FIRE_NUM > 1
+cmplx4 <- incident.pts %>%
+ filter(!INCIDENT_ID %in% cmplx3$INCIDENT_ID,
+        FOD_FIRE_NUM > 1)
+
+# Final bind
+cmplx <- bind_rows(cmplx3,cmplx4)
+
+# Create the member ID table
+cmplx.member <- incident.pts %>%
+ filter(
+  INCIDENT_ID %in% cmplx14$MEMBER_INCIDENT_ID)
+temp <- incident.pts %>%
+ filter(
+  START_YEAR < 2014,
+  INCIDENT_ID %in% complex$MEMBER_INCIDENT_ID)
+# Bind together
+cmplx.member <- bind_rows(cmplx.member,temp)
+
+ # Tidy up
+rm(cmplx1,cmplx2,cmplx3,cmplx4,temp)
+
 ```
 
-For the most part, the duplicates represent smaller, less destructive fires. we can try to filter again by the minimum date difference.
+Now buffer the complex incident summary reports by 20km (accounting for mean and standard deviation distance in MTBS-based join). Filter by ignition date and size differences.
 
 ```{r}
-min.filter <- area.filter %>%
-  group_by(INCIDENT_ID) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup()
-dim(min.filter)[1]
+
+# Filter FIRED events
+# Remove events which have been joined already
+st_agr(events)="constant"
+events_ <- events %>%
+ mutate(tot_ar_ac = tot_ar_km2*247.105) %>%
+ filter(!id %in% events.ics$FIRED_ID) %>%
+ st_transform(st_crs(lambert.prj))
+
+# Buffer complex incident points by 20km
+buffer <- cmplx %>% 
+ filter(!INCIDENT_ID %in% events.ics$INCIDENT_ID) %>%
+ st_buffer(20000) %>% st_transform(st_crs(lambert.prj))
+
+# Loop through years
+join2 = c()
+years = seq(2001,2020,1)
+for (y in 1:length(years)){
+ print(years[y])
+ a <- events_[events_$ig_year == years[y],]
+ st_agr(a) = "constant"
+ b <-buffer[buffer$START_YEAR == years[y],]
+ st_agr(b) = "constant"
+ join2[[y]] <- st_intersection(b,a)
+}
+
+# Bind the results
+df <- bind_rows(join2) %>%
+ # remove rows without a join
+ filter(!is.na(id)) %>%
+ mutate(tot_ar_ac = tot_ar_km2*247.105,
+        FIRED_ACRE_DIFF = abs(FINAL_ACRES-tot_ar_ac),
+        FIRED_PERC_DIFF = abs((tot_ar_ac - FINAL_ACRES)/FINAL_ACRES) * 100,
+        FIRED_DATE_DIFF = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
+ # Create simple data frame
+ st_set_geometry(NULL) %>% 
+ as_tibble()
+
+head(df)
+
+# Get a summary of the date and acre differences
+summary(df$FIRED_DATE_DIFF)
+summary(df$FIRED_ACRE_DIFF)
+
+# Now filter the data frame
+df <- df %>%
+ # Keep near-in-time
+ filter(FIRED_DATE_DIFF <= 25,
+        FIRED_ACRE_DIFF < 50000 | FIRED_PERC_DIFF < 50) %>%
+ # Group by INCIDENT_ID
+ group_by(INCIDENT_ID) %>%
+ # Keep the closest in size
+ slice(which.min(FIRED_PERC_DIFF)) %>%
+ ungroup() %>% group_by(id) %>%
+ slice(which.min(FIRED_PERC_DIFF)) %>% 
+ ungroup()
+
+head(df)
+
+# Checks
+dim(df %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(df %>% group_by(id) %>% filter(n()>1))[1]
+
+########################################################
+
+# Check the histogram of acre difference
+summary(df$FIRED_ACRE_DIFF)
+ggplot(data=df, aes(x=FIRED_ACRE_DIFF)) + 
+ geom_histogram(bins=10,binwidth=10000)
+
+# Check the histogram of acre % difference
+summary(df$FIRED_PERC_DIFF)
+ggplot(data=df, aes(x=FIRED_PERC_DIFF)) + 
+ geom_histogram(bins=10,binwidth=10)
+
+# Check the histogram of date difference
+summary(df$FIRED_DATE_DIFF)
+ggplot(data=df, aes(x=FIRED_DATE_DIFF))+
+ geom_histogram(bins=10,binwidth=10)
+
+########################################################
+
+if(
+ dim(df %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1] > 1 |
+ dim(df %>% group_by(id) %>% filter(n()>1))[1] > 1
+) {
+ # Filter using conservative thresholds
+ # This should remove glaring issues
+ # within 5k acres (useful for smaller fires),
+ # or, 30% difference (useful for larger fires)
+ df <- df %>%
+  filter(FIRED_ACRE_DIFF < 5000 | FIRED_PERC_DIFF < 35)
+} else (print("No duplicate fire joins detected ..."))
+
+df <- df %>%
+  filter(FIRED_ACRE_DIFF < 5000 | FIRED_PERC_DIFF < 50)
+
+# Get the join as FIRED polygons
+events.ics2 <- events %>%
+ as_tibble() %>%
+ dplyr::select(id,geom) %>%
+ filter(id %in% df$id) %>%
+ inner_join(.,df,by="id") %>%
+ rename(FIRED_ID = id) %>%
+ # Now cast back to multipolygon
+ st_as_sf() %>%
+ st_transform(lambert.prj) %>%
+ st_make_valid() %>%
+ st_cast("MULTIPOLYGON")
+
+# Write to file
+st_write(events.ics2,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_buffer_cmplx.gpkg",delete_dsn=TRUE)
+
+# Now clean up the complex table
+# Remove MEMBER_INCIDENT_IDs that are related to any complex fires that made it through the join
+cmplx.rem <- cmplx14 %>%
+ filter(!CPLX_INCIDENT_ID %in% events.ics2$INCIDENT_ID)
+temp <- complex %>%
+ filter(!CPLX_INCIDENT_ID %in% cmplx.rem$CPLX_INCIDENT_ID,
+        !CPLX_INCIDENT_ID %in% events.ics2$INCIDENT_ID)
+cmplx.rem <- bind_rows(cmplx.rem,temp)
+
+# Tidy up
+rm(a,b,buffer,df,join2,temp)
+
 ```
 
-Again, double check on how many duplicates we still have.
+Validation.
 
 ```{r}
-dim(min.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(min.filter%>% group_by(id) %>% filter(n()>1))[1]
-## Check for just destructive events
-print("For destructive incidents (Homes Destroyed > 0): ...")
-dim(min.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(min.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(id)%>%filter(n()>1))[1]
-## And by fire size
-print("For burned area (acres > 1000): ...")
-dim(min.filter%>%filter(FINAL_ACRES>1000)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(min.filter%>%filter(FINAL_ACRES>1000)%>%group_by(id)%>%filter(n()>1))[1]
+
+# Create a LM to show the relationship between ICS and FIRED acres
+lm.fit <- lm(FINAL_ACRES ~ tot_ar_ac, data=events.ics2)
+r2 = round(summary(lm.fit)$r.squared, 2)
+summary(lm.fit)
+
+# Predict
+events.ics2$pred2 <- predict(lm.fit)
+ggplot(data=events.ics2, aes(x=tot_ar_ac,y=FINAL_ACRES)) +
+ geom_point() +
+ geom_line(aes(y=pred2),size=1)+
+ labs(title="Relationship b/w ICS and FIRED Acres \n(Buffer-based Join, Complexes Only)",
+      subtitle=paste0("R-sq: ",r2),
+      x="FIRED Acres",y="ICS Acres")
+rm(r2,lm.fit)
+
 ```
 
-Try to eliminate any exact duplicate rows.
+Now work with the non-complex incidents which have not yet been joined through the MTBS link. Apply the 20km buffer to these incidents and identify overlapping FIRED events.
 
 ```{r}
-min.filter <- min.filter %>% dplyr::select(-c(STUSPS.x, X, X.1)) %>%
-  distinct(.keep_all = T)
-dim(min.filter)[1]
-sum(min.filter$STR_DESTROYED_RES_TOTAL) / sum(ics.west.plus$STR_DESTROYED_RES_TOTAL) * 100
+
+# Remove incidents that were joined in Step 1&2. 
+incis_no.cmplx <- no.cmplx %>%
+ filter(!INCIDENT_ID %in% events.ics$INCIDENT_ID,
+        !INCIDENT_ID %in% events.ics2$INCIDENT_ID) %>%
+ st_transform(st_crs(lambert.prj))
+
+# Remove joined events
+events_ <- events_ %>% filter(!id %in% events.ics2$FIRED_ID)
+
+# Buffer incident points by 20km
+buffer <- incis_no.cmplx %>% st_buffer(20000) %>% st_transform(st_crs(lambert.prj))
+
+# Loop through years
+join = c()
+years = seq(2001,2020,1)
+for (y in 1:length(years)){
+ print(years[y])
+ a <- events_[events_$ig_year == years[y],]
+ st_agr(a) = "constant"
+ b <-buffer[buffer$START_YEAR == years[y],]
+ st_agr(b) = "constant"
+ join[[y]] <- st_intersection(b,a)
+}
+
+# Bind the results
+df <- bind_rows(join) %>%
+ st_set_geometry(NULL) %>% 
+ as_tibble() %>%
+ # Create the difference attributes
+ mutate(FIRED_ACRE_DIFF = abs(FINAL_ACRES-tot_ar_ac),
+        FIRED_PERC_DIFF = abs((tot_ar_ac - FINAL_ACRES)/FINAL_ACRES) * 100,
+        FIRED_DATE_DIFF = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days")))))
+
+head(df)
+
+# Get a summary of the date and acre differences
+summary(df$FIRED_DATE_DIFF)
+summary(df$FIRED_ACRE_DIFF)
+
+# Filter using differences in ignition date and final size
+# Group by incident and compare
+df <- df %>%
+ # Keep near-in-time
+ filter(FIRED_DATE_DIFF <= 25,
+        FIRED_ACRE_DIFF < 50000 | FIRED_PERC_DIFF < 50) %>%
+ group_by(INCIDENT_ID) %>%
+ # Keep the closest in size
+ slice(which.min(FIRED_PERC_DIFF)) %>%
+ ungroup() %>% group_by(id) %>%
+ slice(which.min(FIRED_PERC_DIFF)) %>% 
+ ungroup()
+
+head(df)
+
+# Checks
+dim(df %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(df %>% group_by(id) %>% filter(n()>1))[1]
+
+########################################
+
+# Check the histogram of acre difference
+summary(df$FIRED_ACRE_DIFF)
+ggplot(data=df, aes(x=FIRED_ACRE_DIFF)) + 
+ geom_histogram(bins=10,binwidth=10000)
+
+# Check the histogram of date difference
+summary(df$FIRED_DATE_DIFF)
+ggplot(data=df, aes(x=FIRED_DATE_DIFF))+
+ geom_histogram(bins=10,binwidth=10)
+
+########################################
+
+# Filter using conservative thresholds
+# This should remove glaring issues
+# within 5k acres (useful for smaller fires),
+# Smaller fires may have less than a 50k acre difference but the % difference is massive
+# or, 30% difference (useful for larger fires)
+df <- df %>%
+ filter(FIRED_ACRE_DIFF < 5000 | FIRED_PERC_DIFF < 50)
+
+# Get the join as FIRED polygons
+events.ics3 <- events %>%
+ as_tibble() %>%
+ dplyr::select(id,geom) %>%
+ filter(id %in% df$id) %>%
+ inner_join(.,df,by="id") %>%
+ rename(FIRED_ID = id) %>%
+ # Now cast back to multipolygon
+ st_as_sf() %>%
+ st_transform(lambert.prj) %>%
+ st_make_valid() %>%
+ st_cast("MULTIPOLYGON")
+
+# Write to file
+st_write(events.ics3,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_buffer_no_cmplx.gpkg",delete_dsn=TRUE)
+
+# Tidy
+rm(a,b,df,join,buffer,incis_no.cmplx)
 ```
 
-Isolate duplicate records, export for inspection.
+"Validation".
 
 ```{r}
-d <- min.filter %>% 
-  group_by(INCIDENT_ID) %>% 
-  filter(n()>1) %>%
-  ungroup()
-dd <- min.filter %>% 
-  group_by(id) %>% 
-  filter(n()>1) %>%
-  ungroup()
+
+# Create a LM to show the relationship between ICS and FIRED acres
+lm.fit <- lm(FINAL_ACRES ~ tot_ar_ac, data=events.ics3)
+r2 = round(summary(lm.fit)$r.squared, 2)
+summary(lm.fit)
+
+# Predict
+events.ics3$pred3 <- predict(lm.fit)
+ggplot(data=events.ics3, aes(x=tot_ar_ac,y=FINAL_ACRES)) +
+ geom_point() +
+ geom_line(aes(y=pred3),size=1)+
+ labs(title="Relationship b/w ICS and FIRED Acres \n(Buffer-based Join, Non-Complexes)",
+      subtitle=paste0("R-sq: ",r2),
+      x="FIRED Acres",y="ICS Acres")
+rm(r2,lm.fit)
+
 ```
 
-Isolate non duplicates.
+## Linking remaining complex incidents to FIRED
+
+First, create the master data frame to this point (bind rows on the first three joins). Check what % is joined for a couple key stats.
 
 ```{r}
-min.filter_ <- min.filter %>% 
-  filter(!INCIDENT_ID %in% d$INCIDENT_ID,
-         !id %in% dd$id)
-dim(min.filter_ %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(min.filter_ %>% group_by(id) %>% filter(n()>1))[1]
-sum(min.filter_$STR_DESTROYED_RES_TOTAL) / sum(ics.west.plus$STR_DESTROYED_RES_TOTAL) * 100
+
+events.ics.master <- bind_rows(events.ics,events.ics2,events.ics3)
+
+# Create a temp file to remove incidents which are part of already joined complexes
+cmplx1 <- cmplx14 %>% 
+ filter(CPLX_INCIDENT_ID %in% events.ics.master$INCIDENT_ID)
+
+cmplx2 <- complex %>% filter(!CPLX_INCIDENT_ID %in% cmplx1$CPLX_INCIDENT_ID,
+                             CPLX_INCIDENT_ID %in% events.ics.master$INCIDENT_ID)
+dim(cmplx2%>%filter(CPLX_INCIDENT_ID %in% cmplx1$CPLX_INCIDENT_ID))
+dim(cmplx2%>%filter(MEMBER_INCIDENT_ID %in% cmplx1$MEMBER_INCIDENT_ID))
+
+cmplx.joined <- bind_rows(cmplx1,cmplx2)
+
+rm(cmplx1,cmplx2)
+
+dim(incident.pts%>%filter(INCIDENT_ID %in% cmplx.joined$CPLX_INCIDENT_ID))
+
+# Create the df with complexes and member fires removed
+incident.pts_ <- incident.pts %>%
+ filter(!INCIDENT_ID %in% cmplx.joined$MEMBER_INCIDENT_ID, 
+         !INCIDENT_NAME %in% cmplx.joined$FIRE_NAME)
+temp <- incident.pts %>%
+ filter(INCIDENT_ID %in% cmplx.joined$CPLX_INCIDENT_ID |
+         INCIDENT_NAME %in% cmplx.joined$ICS_COMPLEX_NAME)
+incident.pts_ <- bind_rows(incident.pts_,temp) %>%
+ distinct(., INCIDENT_ID,.keep_all=TRUE)
+rm(temp)
+
+# Checks
+dim(events.ics.master %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(incident.pts_ %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+
+# Get some stats
+sum(events.ics.master$STR_DESTROYED_RES_TOTAL) / sum(incident.pts_$STR_DESTROYED_RES_TOTAL) * 100
+sum(events.ics.master$FINAL_ACRES) / sum(incident.pts_$FINAL_ACRES) * 100
+(sum(events.ics.master$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) / 
+ (sum(incident.pts_$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) * 100
+
+rm(events.ics, events.ics2, events.ics3)
 ```
 
-Calculate nearest neighbor for incidents with duplicates.
+Now we want to work with remaining incidents. Importantly, we are now working with the incident summary table with complex member fires removed as these should be accounted for in the successful complex fire joins (ex/ August Complex, Central LNU, Southern LNU, etc.).
 
-```{r warning=F, message=F}
-## Calculate centroid for FIRED event
-fired.sub <- fired.conus %>% filter(!id %in% min.filter_$id)
-centroid <- st_centroid(fired.sub)
-## Get the incidents that have duplicates
-ics.sub <- ics.west.plus %>% filter(!INCIDENT_ID %in% min.filter_$INCIDENT_ID)
-## Try a join
-t <- st_join(ics.sub, centroid, join = nngeo::st_nn, k = 1, maxdist = 25000)
-## Filter down
-tt <- t %>%
-  mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
-  filter(START_YEAR == ig_year & doy_diff <= 20) %>% 
-  mutate(ar_abs_dif = abs(tot_ar_km2 - FINAL_KM2),
-         ar_chg_dif = abs((tot_ar_km2 - FINAL_KM2)/FINAL_KM2) * 100) %>%
-  group_by(INCIDENT_ID) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup() %>%
-  group_by(INCIDENT_ID) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup()
-## At this point, remove all duplicates
-tt <- tt %>% distinct(id, .keep_all = TRUE)
-## Double check duplicates
-dim(tt %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(tt %>% group_by(id) %>% filter(n()>1))[1]
-```
+In this workflow, we will use KNN to identify possible matching fire events. The join returns all FIRED centroid within a 50km distance of the incident POO (by year). 
 
 ```{r}
-## Now grab FIRED perimeter,
-tt.fired.df <- inner_join(fired.conus%>%as_tibble(), tt, by="id", left=F)
-# Tidy it
-tt.fired.df <- tt.fired.df %>% select(-contains(".x"), -geom.y)
-## Join back to df
-dim(min.filter_%>%filter(INCIDENT_ID %in% tt$INCIDENT_ID))
-final.join <- bind_rows(min.filter_, tt.fired.df) %>%
-  select(-c(X, X.1, doy_diff, ar_abs_dif, ar_chg_dif, geom.x),
-         -contains(".y"))
-  
-## Final test of duplicates
-dim(final.join %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(final.join %>% group_by(id) %>% filter(n()>1))[1]
+
+# Filter joined FIRED events
+events_ <- events_ %>% filter(!id %in% events.ics.master$FIRED_ID)
+
+# Grab remaining incidents
+incis_ <- incident.pts_ %>%
+ filter(!INCIDENT_ID %in% events.ics.master$INCIDENT_ID)
+
+# Grab the centroid
+centroid <- events_ %>% st_centroid()
+
+# Loop through years
+join = c()
+years = seq(2001,2020,1)
+for (y in 1:length(years)){
+ print(years[y])
+ a <- centroid[centroid$ig_year == years[y],]
+ st_agr(a) = "constant"
+ b <- incis_[incis_$START_YEAR == years[y],]
+ st_agr(b) = "constant"
+ join[[y]] <- st_join(b,a,st_nn,k=50,left=TRUE)
+}
+
+# Bind the results
+df <- bind_rows(join) %>%
+ st_set_geometry(NULL) %>% as_tibble() %>%
+ # Create the difference attributes
+ mutate(FIRED_ACRE_DIFF = abs(FINAL_ACRES-tot_ar_ac),
+        FIRED_PERC_DIFF = abs((tot_ar_ac - FINAL_ACRES)/FINAL_ACRES) * 100,
+        FIRED_DATE_DIFF = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days")))))
+head(df)
+
+# Filter using differences in ignition date and final size
+# Group by incident and compare
+df <- df %>%
+ # Keep near-in-time
+ filter(FIRED_DATE_DIFF <= 25,
+        FIRED_ACRE_DIFF < 50000 | FIRED_PERC_DIFF < 50) %>%
+ group_by(INCIDENT_ID) %>%
+ # Keep the closest in size
+ slice(which.min(FIRED_PERC_DIFF)) %>%
+ ungroup() %>% group_by(id) %>%
+ slice(which.min(FIRED_PERC_DIFF)) %>% 
+ ungroup()
+head(df)
+
+# Checks
+dim(df %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(df %>% group_by(id) %>% filter(n()>1))[1]
+
+########################################
+# Check the histogram of acre difference
+summary(df$FIRED_ACRE_DIFF)
+ggplot(data=df, aes(x=FIRED_ACRE_DIFF)) + 
+ geom_histogram(bins=10,binwidth=10000)
+
+# Check the histogram of date difference
+summary(df$FIRED_DATE_DIFF)
+ggplot(data=df, aes(x=FIRED_DATE_DIFF))+
+ geom_histogram(bins=10,binwidth=10)
+########################################
+
+# Now filter thresholds
+# This should remove glaring issues
+df <- df %>%
+ filter(FIRED_ACRE_DIFF < 5000 | FIRED_PERC_DIFF < 50)
+
+# Get the join as FIRED polygons
+events.ics4 <- events %>%
+ as_tibble() %>%
+ dplyr::select(id,geom) %>%
+ filter(id %in% df$id) %>%
+ inner_join(.,df,by="id") %>%
+ rename(FIRED_ID = id) %>%
+ # Now cast back to multipolygon
+ st_as_sf() %>%
+ st_transform(lambert.prj) %>%
+ st_make_valid() %>%
+ st_cast("MULTIPOLYGON")
+
+# Write to file
+st_write(events.ics4,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_buffer_remaining.gpkg",delete_dsn=TRUE)
+
+# Tidy
+rm(buffer,join,df,a,b)
 ```
 
-Reattach the data and tidy.
+Validation.
 
 ```{r}
-final.join_ <- final.join %>%
-  dplyr::select(id, INCIDENT_ID, geom) %>%
-  as_tibble() %>%
-  inner_join(., fired.west.plus%>%dplyr::select(-geom), by="id") %>%
-  inner_join(., ics.west.plus%>%dplyr::select(-geom), by="INCIDENT_ID") %>%
-  dplyr::select(-X.1, -STUSPS.x) %>%
-  rename(STUSPS = STUSPS.y)
+
+# Create a LM to show the relationship between ICS and FIRED acres
+lm.fit <- lm(FINAL_ACRES ~ tot_ar_ac, data=events.ics4)
+r2 = round(summary(lm.fit)$r.squared, 2)
+summary(lm.fit)
+
+# Predict
+events.ics4$pred4 <- predict(lm.fit)
+ggplot(data=events.ics4, aes(x=tot_ar_ac,y=FINAL_ACRES)) +
+ geom_point() +
+ geom_line(aes(y=pred4),size=1)+
+ labs(title="Relationship b/w ICS and FIRED Acres \n(Buffer-based Join, Remaining)",
+      subtitle=paste0("R-sq: ",r2),
+      x="FIRED Acres",y="ICS Acres")
+rm(r2,lm.fit)
+
 ```
 
-Final stats.
+Merge. This represents what is likely the most accurate subset of incidents/FIRED events. 
+
+Grab some statistics.
 
 ```{r}
-print(paste("Percent of homes destroyed by western wildfires:  ",
-            sum(final.join$STR_DESTROYED_RES_TOTAL) / sum(ics.west.plus$STR_DESTROYED_RES_TOTAL) * 100, sep=""))
-print(paste("Percent of homes destroyed by CONUS wildfires:  ",
-            sum(final.join$STR_DESTROYED_RES_TOTAL) / sum(ics.conus$STR_DESTROYED_RES_TOTAL) * 100, sep=""))
-print(paste("Percent of acres burned by western wildfires:  ",
-            sum(final.join$FINAL_ACRES) / sum(ics.west.plus$FINAL_ACRES) * 100, sep=""))
-print(paste("Percent of acres burned by CONUS wildfires:  ",
-            sum(final.join$FINAL_ACRES) / sum(ics.conus$FINAL_ACRES) * 100, sep=""))
+
+events.ics.master <- bind_rows(events.ics.master,events.ics4)
+
+rm(events.ics4)
+
+incident.pts_ <- incident.pts_ %>%
+ filter(!INCIDENT_ID %in% events.ics.master$INCIDENT_ID)
+
+# Check for duplicate records ...
+dim(events.ics.master %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(events.ics.master %>% group_by(FIRED_ID) %>% filter(n()>1))[1]
+
+# Handle duplicate records
+events.ics.master <- events.ics.master %>% distinct(., INCIDENT_ID, .keep_all=TRUE)
+
+# Get some stats
+# Make sure to remove member incidents from complex that have been joined
+sum(events.ics.master$STR_DESTROYED_RES_TOTAL) / sum(incident.pts_$STR_DESTROYED_RES_TOTAL) * 100
+sum(events.ics.master$FINAL_ACRES) / sum(incident.pts_$FINAL_ACRES) * 100
+(sum(events.ics.master$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) / 
+ (sum(incident.pts_$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) * 100
+
+# Write out the master events data so far
+st_write(events.ics.master, "../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_combined.gpkg",
+         delete_dsn=TRUE)
+
 ```
-
-Re-create maps with joined data.
-
-```{r fig.height=5, fig.width=5}
-map2 <- ggplot() +
-  geom_sf(data=final.join%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
-  geom_sf(data=states%>%filter(STUSPS %in% west.plus), fill=NA, color="gray20") +
-  geom_sf(data=final.join%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
-          aes(color=STR_DESTROYED_RES_TOTAL, size=FINAL_ACRES), alpha=0.8) +
-  scale_size(range = c(1,6)) +
-  scale_color_viridis_c(option="inferno", trans="log10") +
-  labs(color = "Homes Destroyed") +
-  coord_sf(crs = st_crs(ics.conus)) +
-  theme_void() +
-  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6, ticks=F,
-                                 label.position = "right", title.position = "left",
-                                 label.theme = element_text(angle = 0, size = 8)),
-         size="none") +
-  theme(legend.title = element_text(angle = 90, size=10),
-        legend.position=c(0.85, 0.7))
-map2
-ggsave(map2, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_WestPlus_Joined.png", sep=""), 
-       width=5, height=5, dpi = 350) # adjust dpi accordingly
-```
-
-```{r fig.width=4, fig.height=2.5, warning=F}
-## reorder factors
-final.join$INCIDENT_NAME <- 
-  reorder(final.join$INCIDENT_NAME, final.join$STR_DESTROYED_RES_TOTAL)
-final.join$INCIDENT_NAME <- 
-  factor(final.join$INCIDENT_NAME, levels=rev(levels(final.join$INCIDENT_NAME)))
-# Grab the top 15
-top10 <- final.join %>% slice_max(STR_DESTROYED_RES_TOTAL, n=10)
-# Plot and label
-f4 <- ggplot(data=final.join, aes(x=START_YEAR, y=STR_DESTROYED_RES_TOTAL, 
-                                     group=factor(INCIDENT_NAME), 
-                                     fill=STR_DESTROYED_RES_TOTAL), color="grey90") +
-  geom_bar(stat="identity", position='stack') +
-  scale_fill_viridis_c(option="inferno", trans="log10") +
-  labs(
-    x="", y="Homes Destroyed\n", fill="") +
-    # title="Homes destroyed by Western wildfires (1999-2020)\n",
-    # caption="Maxwell C. Cook, PhD Student, Department of Geography,
-    # University of Colorado, Boulder\nData source: St. Denis et al., 2020 (updated)") +
-  # ggrepel::geom_text_repel(data=. %>% filter(INCIDENT_ID %in% top10$INCIDENT_ID), 
-  #                          aes(label=INCIDENT_NAME), position=position_jitterdodge(0.5), size = 2) +
-  theme_minimal() +
-  theme(plot.title = element_text(size = 9),
-        plot.subtitle = element_text(size=7),
-        plot.caption = element_text(size=6),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8),
-        axis.text.y = element_text(size=7),
-        axis.text.x = element_text(size=7),
-        legend.position="none")
-f4
-ggsave(f4, file = "../../figs/Westwide-PLUS_HomeLoss_byIncident_1999to2020_Joined.png",
-       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
-rm(top10)
-```
-
-```{r fig.width=4, fig.height=2.5, warning=F}
-## Plot
-f5 <- final.join %>% group_by(START_YEAR) %>%
-  summarize(burned_area = sum(FINAL_ACRES)) %>%
-  ungroup() %>%
-  ggplot(aes(x=START_YEAR, y=burned_area)) +
-  geom_line() +
-  geom_point(aes(size=burned_area, fill=burned_area), shape=21, color = "gray20") +
-  scale_fill_viridis_c(option="rocket", trans="sqrt") +
-  scale_size(1,5) +
-  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
-  scale_x_continuous(limits=c(1999, 2020)) +
-  coord_cartesian(clip = "off") +
-  labs(x="\nIgnition Year", y="Burned Area (acres)\n", title="") +
-  theme_minimal() +
-  theme(plot.title = element_text(size = 9),
-        plot.subtitle = element_text(size=7),
-        plot.caption = element_text(size=6),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8),
-        axis.text.y = element_text(size=7),
-        axis.text.x = element_text(size=7),
-        legend.position="none")
-f5
-ggsave(f5, file = "../../figs/Westwide-PLUS_BurnedArea_1999to2020_Joined.png",
-       width=4, height=2.5, dpi = 300) # adjust dpi accordingly
-```
-
-```{r fig.height=5, fig.width=7.5, warning=F}
-arr2 <- ggarrange(ggarrange(f4, f5, nrow=2, ncol=1, align="v"), 
-                  map2, ncol=2, nrow=1, align="h")
-arr2
-ggsave(arr2, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_1999to2020_Joined.png",
-       width=7.5, height=5, dpi = 300) # adjust dpi accordingly
-```
-
-Save the data.
-
-```{r}
-st_write(final.join, "../../data/spatial/mod/ics-fired/ics-fired_west_plus_2001to2020.gpkg", 
-         delete_dsn = TRUE)
-```
-
-Supplemental figure: home loss across all of CONUS.
-
-```{r fig.height=5, fig.width=7.5}
-map3 <- ggplot() +
-  geom_sf(data=ics.conus%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
-  geom_sf(data=states, fill=NA, color="gray20") +
-  geom_sf(data=ics.conus%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%arrange(STR_DESTROYED_RES_TOTAL),
-          aes(color=STR_DESTROYED_RES_TOTAL, size=FINAL_ACRES), alpha=0.8) +
-  scale_size(range = c(1,6)) +
-  scale_color_viridis_c(option="inferno", trans="log10") +
-  labs(color = "Homes Destroyed") +
-  coord_sf(crs = st_crs(ics.conus)) +
-  theme_void() +
-  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6, ticks=F,
-                                 label.position = "right", title.position = "left",
-                                 label.theme = element_text(angle = 0, size = 8)),
-         size="none") +
-  theme(legend.title = element_text(angle = 90, size=10),
-        legend.position=c(0.9, 0.25))
-map3
-ggsave(map3, file = paste("../../figs/Map1-ICS209_HomesDestroyed_Area_CONUS_Joined.png", sep=""), 
-       width=7.5, height=5, dpi = 350) # adjust dpi accordingly
-```
-
-## Now join the remaining incidents (CONUS East).
-
-```{r}
-# Isolate eastern wildfires
-ics.east <- ics.conus %>% filter(!STUSPS %in% west.plus)
-fired.east <- fired.conus %>% filter(!STUSPS %in% west.plus)
-```
-
-By spatial buffer overlap.
-
-```{r warning=F}
-## Remove records reporting 0 acres (likely erroneous)
-ics.east <- ics.east %>% 
-  filter(FINAL_ACRES != 0,
-         FINAL_KM2 != 0,
-         START_YEAR >= 2001,
-         !is.na(DISCOVERY_DATE))
-## Buffer incident points by generous 50km
-ics.buffer <- st_buffer(ics.east, 50000)
-## Join to any overlapping FIRED perimeters
-buffer.join <- st_join(fired.east, ics.buffer, join=st_intersects)
-```
-
-A 50km buffer join to all events yields over two million records. Start filtering them down by attributes.
-
-Ignition date filters ...
-
-```{r}
-## By DOY
-doy.filter <- buffer.join %>% 
-  mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
-  filter(START_YEAR == ig_year & doy_diff <= 20)
-dim(doy.filter)[1]
-```
-
-Fire size filters ...
-
-```{r}
-area.filter <- doy.filter %>% 
-  mutate(ar_abs_dif = abs(tot_ar_km2 - FINAL_KM2),
-         ar_chg_dif = abs((tot_ar_km2 - FINAL_KM2)/FINAL_KM2) * 100) %>%
-  group_by(INCIDENT_ID) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup()
-dim(area.filter)[1]
-```
-
-Now double check on how many duplicates we still have.
-
-```{r}
-dim(area.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(area.filter %>% group_by(id) %>% filter(n()>1))[1]
-## Check for just destructive events
-print("For destructive incidents (Homes Destroyed > 0): ...")
-dim(area.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(area.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(id)%>%filter(n()>1))[1]
-## And by fire size
-print("For burned area (acres > 100): ...")
-dim(area.filter%>%filter(FINAL_ACRES>100)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(area.filter%>%filter(FINAL_ACRES>100)%>%group_by(id)%>%filter(n()>1))[1]
-```
-
-For the most part, the duplicates represent smaller, less destructive fires. we can try to filter again by the minimum date difference.
-
-```{r}
-min.filter <- area.filter %>%
-  group_by(INCIDENT_ID) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup()
-dim(min.filter)[1]
-```
-
-Again, double check on how many duplicates we still have.
-
-```{r}
-dim(min.filter %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(min.filter%>% group_by(id) %>% filter(n()>1))[1]
-## Check for just destructive events
-print("For destructive incidents (Homes Destroyed > 0): ...")
-dim(min.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(min.filter%>%filter(STR_DESTROYED_RES_TOTAL>0)%>%group_by(id)%>%filter(n()>1))[1]
-## And by fire size
-print("For burned area (acres > 100): ...")
-dim(min.filter%>%filter(FINAL_ACRES>100)%>%group_by(INCIDENT_ID)%>%filter(n()>1))[1]
-dim(min.filter%>%filter(FINAL_ACRES>100)%>%group_by(id)%>%filter(n()>1))[1]
-```
-
-Try to eliminate any exact duplicate rows.
-
-```{r}
-min.filter <- min.filter %>% dplyr::select(-c(fid_, STUSPS.x, X, X.1)) %>%
-  distinct(.keep_all = T)
-dim(min.filter)[1]
-sum(min.filter$STR_DESTROYED_RES_TOTAL) / sum(ics.east$STR_DESTROYED_RES_TOTAL) * 100
-```
-
-Isolate duplicate records, export for inspection.
-
-```{r}
-d <- min.filter %>% 
-  group_by(INCIDENT_ID) %>% 
-  filter(n()>1) %>%
-  ungroup()
-dd <- min.filter %>% 
-  group_by(id) %>% 
-  filter(n()>1) %>%
-  ungroup()
-```
-
-Isolate non duplicates.
-
-```{r}
-min.filter_ <- min.filter %>% 
-  filter(!INCIDENT_ID %in% d$INCIDENT_ID,
-         !id %in% dd$id)
-dim(min.filter_ %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(min.filter_ %>% group_by(id) %>% filter(n()>1))[1]
-sum(min.filter_$STR_DESTROYED_RES_TOTAL) / sum(ics.east$STR_DESTROYED_RES_TOTAL) * 100
-```
-
-Calculate nearest neighbor for incidents with duplicates.
-
-```{r}
-## Calculate centroid for FIRED event
-fired.sub <- fired.east %>% filter(!id %in% min.filter_$id)
-centroid <- st_centroid(fired.sub)
-## Get the incidents that have duplicates
-ics.sub <- ics.east %>% filter(!INCIDENT_ID %in% min.filter_$INCIDENT_ID)
-## Try a join
-t <- st_join(ics.sub, centroid, join = nngeo::st_nn, k = 1, maxdist = 25000)
-## Filter down
-tt <- t %>%
-  mutate(doy_diff = (abs(as.numeric(difftime(DISCOVERY_DATE, ig_date, units = "days"))))) %>%
-  filter(START_YEAR == ig_year & doy_diff <= 20) %>% 
-  mutate(ar_abs_dif = abs(tot_ar_km2 - FINAL_KM2),
-         ar_chg_dif = abs((tot_ar_km2 - FINAL_KM2)/FINAL_KM2) * 100) %>%
-  group_by(INCIDENT_ID) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(ar_chg_dif == min(ar_chg_dif),
-         ar_abs_dif == min(ar_abs_dif)) %>%
-  ungroup() %>%
-  group_by(INCIDENT_ID) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup() %>%
-  group_by(id) %>%
-  filter(doy_diff == min(doy_diff)) %>%
-  ungroup()
-## At this point, remove all duplicates
-tt <- tt %>% distinct(id, .keep_all = TRUE)
-## Double check duplicates
-dim(tt %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(tt %>% group_by(id) %>% filter(n()>1))[1]
-```
-
-```{r}
-## Now grab FIRED perimeter,
-tt.fired.df <- inner_join(fired.conus%>%as_tibble(), tt, by="id", left=F) %>% st_as_sf()
-# Tidy it
-tt.fired.df <- tt.fired.df %>% select(-contains(".x"))
-## Join back to df
-dim(min.filter_%>%filter(INCIDENT_ID %in% tt$INCIDENT_ID))
-final.join <- bind_rows(min.filter_, tt.fired.df) %>%
-  select(-c(X, X.1, doy_diff, ar_abs_dif, ar_chg_dif, bupr_sum, bupr_sum1k, geom.x),
-         -contains(".y"))
-  
-## Final test of duplicates
-dim(final.join %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(final.join %>% group_by(id) %>% filter(n()>1))[1]
-```
-
-Export.
-
-```{r}
-st_write(final.join, "../../data/spatial/mod/ics-fired/ics-fired_east_2001to2020.gpkg", 
-         delete_dsn = TRUE)
-```
-
