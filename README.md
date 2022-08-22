@@ -26,7 +26,7 @@ Links to data:
 
 * [ICS209-PLUS (1999-2014)](https://figshare.com/articles/dataset/ICS209-PLUS_Cleaned_databases/8048252/14); 
 * [ICS209-PLUS (1999-2020)]: Coming Soon ...
-* [FIRED Events, CONUS + AK (2001-2021](https://scholar.colorado.edu/concern/datasets/d504rm74m); 
+* [FIRED Events, CONUS + AK (2001-2021)](https://scholar.colorado.edu/concern/datasets/d504rm74m); 
 * [FIREDpy GitHub Repo](https://github.com/earthlab/firedpy)
 
 # References
