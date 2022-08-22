@@ -132,7 +132,7 @@ ggplot(data=mtbs.inci, aes(x=MTBS_ACRE_DIFF)) +
  geom_histogram(bins=10,binwidth=1000)
 
 # write this file out
-st_write(mtbs.inci, "../../data/spatial/mod/ICS_PLUS_FIRED/mtbs_perims_w_incidents.gpkg", delete_dsn=T)
+st_write(mtbs.inci, "../../data/spatial/mod/ics-fired/mtbs_perims_w_incidents.gpkg", delete_dsn=T)
 
 ```
 
@@ -243,7 +243,7 @@ if(any(duplicated(toupper(names(events.ics))))){
 }
 
 # Write to file
-st_write(events.ics,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_mtbs.gpkg",delete_dsn=TRUE)
+st_write(events.ics,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_mtbs.gpkg",delete_dsn=TRUE)
 
 # Tidy up
 rm(mtbs,df,a,b,join)
@@ -468,7 +468,7 @@ events.ics2 <- events %>%
  st_cast("MULTIPOLYGON")
 
 # Write to file
-st_write(events.ics2,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_buffer_cmplx.gpkg",delete_dsn=TRUE)
+st_write(events.ics2,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_buffer_cmplx.gpkg",delete_dsn=TRUE)
 
 # Now clean up the complex table
 # Remove MEMBER_INCIDENT_IDs that are related to any complex fires that made it through the join
@@ -603,7 +603,7 @@ events.ics3 <- events %>%
  st_cast("MULTIPOLYGON")
 
 # Write to file
-st_write(events.ics3,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_buffer_no_cmplx.gpkg",delete_dsn=TRUE)
+st_write(events.ics3,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_buffer_no_cmplx.gpkg",delete_dsn=TRUE)
 
 # Tidy
 rm(a,b,df,join,buffer,incis_no.cmplx)
@@ -702,7 +702,7 @@ for (y in 1:length(years)){
  st_agr(a) = "constant"
  b <- incis_[incis_$START_YEAR == years[y],]
  st_agr(b) = "constant"
- join[[y]] <- st_join(b,a,st_nn,k=50,left=TRUE)
+ join[[y]] <- st_join(b,a,st_nn,k=50,maxdist=50000,left=TRUE)
 }
 
 # Bind the results
@@ -719,7 +719,7 @@ head(df)
 df <- df %>%
  # Keep near-in-time
  filter(FIRED_DATE_DIFF <= 25,
-        FIRED_ACRE_DIFF < 50000 | FIRED_PERC_DIFF < 50) %>%
+        FIRED_ACRE_DIFF < 50000 | FIRED_PERC_DIFF < 55) %>% # handles the East Troublesome Fire
  group_by(INCIDENT_ID) %>%
  # Keep the closest in size
  slice(which.min(FIRED_PERC_DIFF)) %>%
@@ -747,7 +747,7 @@ ggplot(data=df, aes(x=FIRED_DATE_DIFF))+
 # Now filter thresholds
 # This should remove glaring issues
 df <- df %>%
- filter(FIRED_ACRE_DIFF < 5000 | FIRED_PERC_DIFF < 50)
+ filter(FIRED_ACRE_DIFF < 5000 | FIRED_PERC_DIFF < 55)
 
 # Get the join as FIRED polygons
 events.ics4 <- events %>%
@@ -763,10 +763,10 @@ events.ics4 <- events %>%
  st_cast("MULTIPOLYGON")
 
 # Write to file
-st_write(events.ics4,"../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_by_buffer_remaining.gpkg",delete_dsn=TRUE)
+st_write(events.ics4,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_buffer_remaining.gpkg",delete_dsn=TRUE)
 
 # Tidy
-rm(buffer,join,df,a,b)
+rm(join,df,a,b)
 ```
 
 Validation.
@@ -796,29 +796,57 @@ Grab some statistics.
 
 ```{r}
 
-events.ics.master <- bind_rows(events.ics.master,events.ics4)
-
-rm(events.ics4)
-
-incident.pts_ <- incident.pts_ %>%
- filter(!INCIDENT_ID %in% events.ics.master$INCIDENT_ID)
+events.ics.master_ <- bind_rows(events.ics.master,events.ics4)
 
 # Check for duplicate records ...
-dim(events.ics.master %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
-dim(events.ics.master %>% group_by(FIRED_ID) %>% filter(n()>1))[1]
+dim(events.ics.master_ %>% group_by(INCIDENT_ID) %>% filter(n()>1))[1]
+dim(events.ics.master_ %>% group_by(FIRED_ID) %>% filter(n()>1))[1]
 
 # Handle duplicate records
-events.ics.master <- events.ics.master %>% distinct(., INCIDENT_ID, .keep_all=TRUE)
+events.ics.master_ <- events.ics.master_ %>% distinct(., INCIDENT_ID, .keep_all=TRUE)
 
 # Get some stats
 # Make sure to remove member incidents from complex that have been joined
-sum(events.ics.master$STR_DESTROYED_RES_TOTAL) / sum(incident.pts_$STR_DESTROYED_RES_TOTAL) * 100
-sum(events.ics.master$FINAL_ACRES) / sum(incident.pts_$FINAL_ACRES) * 100
-(sum(events.ics.master$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) / 
+sum(events.ics.master_$STR_DESTROYED_RES_TOTAL) / sum(incident.pts_$STR_DESTROYED_RES_TOTAL) * 100
+sum(events.ics.master_$FINAL_ACRES) / sum(incident.pts_$FINAL_ACRES) * 100
+(sum(events.ics.master_$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) / 
  (sum(incident.pts_$PROJECTED_FINAL_IM_COST,na.rm=TRUE)/1e9) * 100
 
+rm(events.ics4)
+```
+
+Validation. Final.
+
+```{r}
+
+# Create a LM to show the relationship between ICS and FIRED acres
+lm.fit <- lm(FINAL_ACRES ~ tot_ar_ac, data=events.ics.master_)
+r2 = round(summary(lm.fit)$r.squared, 2)
+summary(lm.fit)
+
+# Predict
+events.ics.master_$pred5 <- predict(lm.fit)
+ggplot(data=events.ics.master_, aes(x=tot_ar_ac,y=FINAL_ACRES)) +
+ geom_point() +
+ geom_line(aes(y=pred5),size=1)+
+ labs(title="Relationship b/w ICS and FIRED Acres \n(Final Join)",
+      subtitle=paste0("R-sq: ",r2),
+      x="FIRED Acres",y="ICS Acres")
+rm(r2,lm.fit)
+
+```
+
+Final bind and export.
+
+```{r}
+
+events.ics.master_ <- events.ics.master_ %>%
+ dplyr::select(-c(pred2,pred3,pred4)) %>%
+ rename(PREDICTED_ACRES = pred5)
+
 # Write out the master events data so far
-st_write(events.ics.master, "../../data/spatial/mod/ICS_PLUS_FIRED/ics209plus_fired_combined.gpkg",
+st_write(events.ics.master_, "../../data/spatial/mod/ics-fired/ics209plus_fired_combined.gpkg",
          delete_dsn=TRUE)
 
 ```
+

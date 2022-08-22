@@ -48,6 +48,7 @@ scratch/
 docs/
 
 # Data folders
+archive/
 data/archive/
 data/spatial/mod/boundaries/
 data/spatial/mod/ics-fired/single-part_hull.gpkg
@@ -61,17 +62,23 @@ data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shp.xml
 data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shx
 !*.gpkg-shm
 !*.gpkg-wal
-
-# FAMWEB data
 data/tabular/raw/famweb/
+data/spatial/mod/ics-fired.zip
+data/spatial/raw/boundaries/Spatial_Boundaries_NHGIS/
+data/spatial/mod/ics-fired/mtbs_perims_w_incidents.gpkg
+data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_sitreps_1999to2020.csv
 
 # IPYNB checkpoints
 code/Python/.ipynb_checkpoints
 
 # R code to ignore
-code/R/scratch.R
-code/R/tidy-data.R
 code/archive/
+code/R/scratch.R
+!*.DS_Store
+Code/.DS_Store
+.DS_Store
 
 # Misc
 figs/archive/
+
+figs/
