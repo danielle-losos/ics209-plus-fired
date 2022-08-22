@@ -1,6 +1,32 @@
-# ICS-209-PLUS, ICS+FIRED; Wildfire Impacts
-Exploration and analysis of the ICS-209-PLUS (St. Denis et al. 2020 updated) with emphasis on western U.S. wildfire incidents and residential structure loss. Including workflow for linking the ICS-209-PLUS and the FIRe Events Delineation (FIRED) event database (ICS++FIRED). 
+# ICS209-PLUS, ICS+FIRED (Fire Events Delineation)
 
-[Link to ICS-209-PLUS database](https://figshare.com/articles/dataset/ICS209-PLUS_Cleaned_databases/8048252/14); 
-[Link to FIRED database](https://scholar.colorado.edu/concern/datasets/nv935382p); 
-[Link to FIRED repository](https://github.com/earthlab/firedpy)
+This repository contains the workflow used to generate a link between Incident Command Summary Reports from the ICS209-PLUS (1999-2020) database (St. Denis et al. 2022, in review) and satellite-derived wildfire events from the Fire Events Delineation (FIRED) algorithm (Balch et al. 2020, Mahood et al. 2022).
+
+The process includes a multi-step approach using three different primary methods for spatially joining these two datasets; 1) joining based on available Monitoring Trends in Burn Severity (MTBS) footprints to identify largest overlapping FIRED events in space and time, 2) A buffer and spatial overlap approach using the latitude and longitude from the ICS209-PLUS Point of Origin (POO), and 3) a K-Nearest Neighbor index identifying incidents and events that are near in space.
+
+For each of these methods, we apply spatial and temporal threshold to the joined records such that we retain matching incidents/events which have a high confidence. Additionaly, we performed extensive manual QA/QC examining outliers and well known wildfire incidents to help refine the database. This work is on-going but is now represented in St. Denis et al. (2022), in review, and includes the high confidence joins between these two important databases. Basic validation of the resulting product involves fitting a linear model to predicted final burned acres in the ICS209-PLUS using the satellite-mapped burned acres by FIRED. With R2 values of 0.95, these methods achieve high confidence joins between these two different databases.
+
+# Implications
+
+This new ICS+FIRED database represents 
+
+# Additional Resources / Links
+
+This repository also includes exploration and analysis of the ICS209-PLUS, FIRED and ICS+FIRED databases with emphasis on western U.S. wildfire incidents and residential structure loss. Check out these markdowns for visualizations of these data: ...
+
+Links to data:
+
+[ICS209-PLUS (1999-2014)](https://figshare.com/articles/dataset/ICS209-PLUS_Cleaned_databases/8048252/14); 
+[ICS209-PLUS (1999-2020)]: Coming Soon ...
+[FIRED Events, CONUS + AK (2001-2021](https://scholar.colorado.edu/concern/datasets/d504rm74m); 
+[FIREDpy GitHub Repo](https://github.com/earthlab/firedpy)
+
+# References
+
+St Denis, Lise A., Nathan P. Mietkiewicz, Karen C. Short, Mollie Buckland, and Jennifer K. Balch. "All-hazards dataset mined from the US National Incident Management System 1999–2014." Scientific data 7, no. 1 (2020): 1-18.
+
+Balch, Jennifer K., Lise A. St. Denis, Adam L. Mahood, Nathan P. Mietkiewicz, Travis M. Williams, Joe McGlinchy, and Maxwell C. Cook. "Fired (Fire events delineation): An open, flexible algorithm and database of us fire events derived from the modis burned area product (2001–2019)." Remote Sensing 12, no. 21 (2020): 3498.
+
+Mahood, Adam L., Estelle J. Lindrooth, Maxwell C. Cook, and Jennifer K. Balch. "Country-level fire perimeter datasets (2001–2021)." Scientific data 9, no. 1 (2022): 1-8.
+
+St. Denis et al (2022) in review
