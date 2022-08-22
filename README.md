@@ -1,4 +1,4 @@
-# ICS209-PLUS, ICS+FIRED (Fire Events Delineation)
+# ICS209-PLUS; ICS+FIRED (Fire Events Delineation)
 
 This repository contains the workflow used to generate a link between Incident Command Summary Reports from the ICS209-PLUS (1999-2020) database (St. Denis et al. 2022, in review) and satellite-derived wildfire events from the Fire Events Delineation (FIRED) algorithm (Balch et al. 2020, Mahood et al. 2022).
 
@@ -8,7 +8,15 @@ For each of these methods, we apply spatial and temporal threshold to the joined
 
 # Implications
 
-This new ICS+FIRED database represents 
+This new ICS+FIRED product represents a significant database of wildfire characteristics from both incident command and wildfire behavior perspective. The ICS209-PLUS provides detailed information including values at risk, suppression resources and tactics, incident cost, and more. The FIRED database provides a new look at fire growth characteristics such as the simple fire spread rate (acre/day) and the maximum single-day fire growth (acres) along with estimates of the timing of maximum growth, the ignition location (fuzzy), and modal landcover types. 
+
+The joined database produced in "ics-fired.Rmd" results in 14,796 incidents with co-occurring FIRED events representing an important subset of the data:
+
+* 91.4% of residential structures destroyed
+* 81.4% of total acres burned 
+* 86.3% of projected/estimated supression costs
+
+* figure of completeness in key metrics across the time period (2001-2020) *
 
 # Additional Resources / Links
 
