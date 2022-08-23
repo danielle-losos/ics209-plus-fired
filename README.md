@@ -16,7 +16,7 @@ The joined database produced in "ics-fired.Rmd" results in 14,796 incidents with
 * 81.4% of total acres burned 
 * 86.3% of projected/estimated supression costs
 
-![alt text](https://github.com/maxwellCcook/[ics209-plus-fired/blob/main/image.jpg?raw=true)
+![alt text](https://github.com/maxwellCcook/ics209-plus-fired/blob/main/figures/ics209plus_ICS-FIRED_burnedArea_compare.png?raw=true)
 
 # Additional Resources / Links
 
