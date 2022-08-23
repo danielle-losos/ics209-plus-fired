@@ -36,7 +36,7 @@ state.summary <- left_join(
  st_as_sf()
 
 # plot key metrics
-ggplot() +
+map1 <- ggplot() +
   geom_sf(data=state.summary, aes(fill=STR_DESTR_TOTAL), color="gray40") +
   scale_fill_viridis_c(option="magma", trans="log10", na.value = 0) +
   labs(fill="Structures Destroyed") +
@@ -48,6 +48,10 @@ ggplot() +
          legend.text = element_text(size=7),
          legend.position=c(0.8, 0.1),
          plot.title = element_text(size=10, hjust=0.2))
+map1
+# Save it
+ggsave(f1, file = "../../figs/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png",
+       width=5.5, height=4, dpi = 350, bg="white") # adjust dpi accordingly
 
 rm(states, state.summary)
 ```
@@ -88,16 +92,20 @@ Ecoregions (Level III).
 
 ```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
 
-ecol3 <- st_read("../../../data/boundaries/ecological/ecoregion/conus_cec_eco.gpkg", layer="eco_l3")
+ecol3 <- st_read("../../../data/boundaries/ecological/ecoregion/na_cec_eco_l3.gpkg")
+states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_w_ak_lambert.gpkg")
 eco.summary <- read_csv("../../data/tabular/mod/summaries/conus_ecol3_summary_key_vars.csv")
 
 # join the attributes
-eco.summary <- inner_join(ecol3%>%as_tibble(), eco.summary, by="NA_L3CODE") %>%
-  st_as_sf()
+eco.summary <- inner_join(
+ ecol3 %>% as_tibble(), eco.summary, by="NA_L3CODE") %>%
+ st_as_sf() %>%
+ st_transform(st_crs(ics.points))
 
 # plot key metrics
 ggplot() +
   geom_sf(data=eco.summary, aes(fill=STR_DESTR_TOTAL), color=NA) +
+  geom_sf(data=states, fill=NA) +
   scale_fill_viridis_c(option="magma", trans="log10", na.value = 0) +
   labs(fill="Structures Destroyed") +
   theme_void() + 
@@ -112,6 +120,7 @@ ggplot() +
 rm(ecol3, eco.summary)
 
 ```
+
 
 ## Figure 1. Spatial and temporal distribution of residential structure loss.
 
@@ -256,19 +265,149 @@ ggsave(arr1, file = "../../figs/Westwide_HomeLoss_Burned_Area_byIncident_wMap_19
 rm(arr1)
 ```
 
+## ICS+FIRED Summary Figures
 
+Here we generate a suite of figures to support the ICS+FIRED workflow.
 
+Figure 1. Comparison of annual area burned (total) and captured by ICS+FIRED.
 
-## Data Prep
-
-Filter out incidents with 0 acres or with missing temporal information.
+Importantly, we need to first account for some of the possible "double-counting" that occurs due to the complex associations table. We can do this by removing "MEMBER_INCIDENT_ID" that are captured as a complex.
 
 ```{r}
-# Remove records reporting 0 acres (likely erroneous)
-ics.conus <- ics.conus %>% 
-  filter(FINAL_ACRES != 0, FINAL_KM2 != 0,
-         !is.na(DISCOVERY_DATE))
+
+# Handle member incidents from complex associations.
+# Load the complex associations tables
+complex <- read_csv("../../data/tabular/raw/wf-incidents/ics-209-plus-2.0/cpx-assocs-1999-2020.csv")
+
+# Grab a DF of the complex IDs only
+df.cpx <- ics.points %>%
+ filter(INCIDENT_ID %in% complex$CPLX_INCIDENT_ID)
+
+# Filter out the MEMBER_INCIDENT_ID
+df.mem <- ics.points %>%
+ filter(!INCIDENT_ID %in% complex$MEMBER_INCIDENT_ID)
+
+# Merge back together
+df <- bind_rows(df.mem,df.cpx)
+
+# Test (Central LNU)
+dim(df %>% filter(INCIDENT_ID=="2017_7241051_TUBBS"))
+dim(df %>% filter(INCIDENT_ID=="2017_7293180_CENTRAL LNU COMPLEX"))
+
+# Tidy up
+rm(df.cpx,df.mem)
+
 ```
+
+Figure 1A: Results from Linear Model
+
+```{r}
+
+# Create a LM to show the relationship between ICS and FIRED acres
+lm.fit <- lm(FINAL_ACRES ~ tot_ar_ac, data=ics.fired)
+r2 = round(summary(lm.fit)$r.squared, 2)
+summary(lm.fit)
+plot(lm.fit)
+print("~~~~~~~~~")
+
+# Predict
+pred <- predict(lm.fit, interval="confidence")
+pred <- cbind(ics.fired,pred)
+
+# Plot
+p1 <- ggplot(data=pred, aes(x=tot_ar_ac,y=FINAL_ACRES)) +
+ geom_point(size=0.75) +
+ geom_ribbon(aes(ymin=lwr,ymax=upr),alpha=0.25)+
+ geom_line(aes(y=fit),size=0.8)+
+ scale_y_continuous(labels = scales::label_number(suffix=" M", scale=1e-6)) +
+ scale_x_continuous(labels = scales::label_number(suffix=" M", scale=1e-6)) +
+ labs(title="Predicted Burned Area (ICS+FIRED)",
+      subtitle=paste0("R-sq: ",r2),
+      x="FIRED Acres",y="ICS209-PLUS Acres") +
+ theme_minimal() +
+ theme(plot.title = element_text(size = 10),
+       plot.subtitle = element_text(size = 8))
+p1
+rm(r2,lm.fit,pred)
+
+```
+
+Figure 1B. Annual area burned percent complete by ICS+FIRED.
+
+```{r fig.width=7.5, fig.height=4.25}
+
+# Group the western U.S. incidents
+grp <- ics.fired %>% 
+  group_by(START_YEAR) %>%
+  summarize(burned_area = sum(FINAL_ACRES)) %>%
+  ungroup()
+
+# Plot the comparison
+p2 <- df %>% 
+ filter(START_YEAR>2000) %>%
+ group_by(START_YEAR) %>%
+ summarize(burned_area = sum(FINAL_ACRES)) %>%
+ ungroup() %>%
+ ggplot(aes(x=START_YEAR, y=burned_area)) +
+ geom_line(data=grp, aes(x=START_YEAR, y=burned_area, color="ICS+FIRED"), position="stack",
+           linetype = 6, size = 0.8) +
+ geom_point(data=grp, aes(x=START_YEAR, y=burned_area), 
+            shape=21, size = 1.75, color = "gray20", fill = "gray50") +
+ geom_line() +
+ geom_point(shape=21, size = 2.5, color = "gray20", fill = "red") +
+ scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) +
+ scale_x_continuous(limits=c(1999, 2020)) +
+ scale_color_manual(name = "", values=c("ICS+FIRED"="gray60")) +
+ labs(x="Ignition Year", y="Burned Area (acres)", title="CONUS+AK Burned Area (2001-2020)",
+      subtitle="81.4% of Burned Area Captured by ICS+FIRED") +
+ theme_minimal() +
+ theme(plot.title = element_text(size = 10),
+       plot.subtitle = element_text(size = 8),
+       legend.position=c(0.2, 0.95))
+p2
+
+
+# Combine the two
+p3 <- ggpubr::ggarrange(p1,p2)
+p3
+
+# Save it
+ggsave(p3, file = "../../figures/ics209plus_ICS-FIRED_burnedArea_compare.png",
+       width=7.5, height=3.5, dpi = 350, bg="white") # adjust dpi accordingly
+
+# Tidy
+rm(p1,p2,p3,grp)
+
+```
+
+Figure 2. Map of Structures Destroyed Captured in ICS+FIRED
+
+```{r}
+
+map <- ggplot() +
+  geom_sf(data=ics.points, color="gray60", size=0.3, alpha=0.9) +
+  geom_sf(data=states, fill=NA, color="gray20") +
+  geom_sf(data=ics.fired %>% filter(STR_DESTROYED_TOTAL>0) %>% arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=FINAL_ACRES), alpha=0.8) +
+  scale_size(range = c(1,6)) +
+  scale_color_viridis_c(option="inferno", trans="log10") +
+  labs(color = "Structures Destroyed") +
+  coord_sf(crs = st_crs(ics.points)) +
+  theme_void() +
+  guides(color = guide_colourbar(position="top", barwidth = 0.4, barheight = 6, ticks=F,
+                                 label.position = "right", title.position = "left",
+                                 label.theme = element_text(angle = 0, size = 8)),
+         size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(0.85, 0.7))
+
+map
+
+ggsave(map1, file = paste("../../figures/ics_plus_fired_HomesDestroyed_conus-ak.png", sep=""),
+       width=5, height=5.75, dpi = 350, bg="white") # adjust dpi accordingly
+
+```
+
 
 Print some summary statistics for CONUS and West+.
 
@@ -303,13 +442,6 @@ sum(ics.west$FINAL_ACRES, na.rm=T) / sum(ics.conus$FINAL_ACRES, na.rm=T) * 100
 sum(ics.west$STR_DESTROYED_RES_TOTAL, na.rm=T) / sum(ics.conus$STR_DESTROYED_RES_TOTAL, na.rm=T) * 100
 sum(ics.west$PROJECTED_FINAL_IM_COST, na.rm=T) / sum(ics.conus$PROJECTED_FINAL_IM_COST, na.rm=T) * 100
 
-```
-
-Print some summaries for FIRED.
-
-```{r}
-sum(fired.conus$tot_ar_km2)
-mean(fired.conus$mx_grw_km2)
 ```
 
 ## ICS209-PLUS Figures
