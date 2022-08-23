@@ -18,6 +18,8 @@ The joined database produced in "ics-fired.Rmd" results in 14,796 incidents with
 
 ![alt text](https://github.com/maxwellCcook/ics209-plus-fired/blob/main/figures/ics209plus_ICS-FIRED_burnedArea_compare.png?raw=true)
 
+Figure 2. (left) Results from linear model predicting ICS209-PLUS burned acres by co-occurring FIRED acres (ICS+FIRED). (right) Annual area burned reported by ICS209-PLUS and by ICS+FIRED (2001-2020).
+
 # Additional Resources / Links
 
 This repository also includes exploration and analysis of the ICS209-PLUS, FIRED and ICS+FIRED databases with emphasis on western U.S. wildfire incidents and residential structure loss. Check out these markdowns for visualizations of these data: ...
