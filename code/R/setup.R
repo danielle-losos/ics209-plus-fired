@@ -28,9 +28,6 @@ west <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT")
 incidents <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_incidents_1999to2020.csv")
 # # Situation Reports
 # sitreps <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_sitreps_1999to2020.csv")
-# Complex associations table
-complex <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_complex_associations_1999to2020.csv")
-cmplx14 <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/cpx-assocs-2014-2020.csv")
 
 # Load the latest FIRED data (manually QC'd)
 events <- st_read("../FIRED/data/spatial/mod/event-updates/conus-ak_to2022_events_qc.gpkg") %>%

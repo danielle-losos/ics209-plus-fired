@@ -77,6 +77,10 @@ Join these records to MTBS perimeters, where possible. Keep only unique rows (i.
 
 ```{r}
 
+# Load the complex associations tables
+complex <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_complex_associations_1999to2020.csv")
+cmplx14 <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/cpx-assocs-2014-2020.csv")
+
 # Isolate incidents which were not managed as complexes
 no.cmplx <- incident.pts %>% 
  # Filter incidents with 0 acres

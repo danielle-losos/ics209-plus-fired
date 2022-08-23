@@ -9,18 +9,31 @@ knitr::opts_chunk$set(echo = TRUE)
 source("setup.R")
 ```
 
+Bring in the spatial ics-209-plus, ICS+FIRED.
+
+```{r include=F}
+ics.points <- st_read("../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg")
+ics.fired <- st_read("../../data/spatial/mod/ics-fired/ics209plus_fired_combined.gpkg")
+```
+
 ## Summary Figures by Regions
 
-State Administrative Units
+State Administrative Units.
 
-```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
+```{r, messages=F, warning=F, fig.height=4, fig.width=5.5}
 
-states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_conus.gpkg")
+# Read in the formatted CONUS+AK file
+library(albersusa,quietly=TRUE)
+# states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_w_ak_lambert.gpkg")
+states <- usa_sf() %>%
+ rename(STUSPS = iso_3166_2) %>%
+ st_transform(st_crs(ics.points))
 state.summary <- read_csv("../../data/tabular/mod/summaries/conus_state_summary_key_vars.csv")
 
 # join the attributes
-state.summary <- inner_join(states%>%as_tibble(), state.summary, by="STUSPS") %>%
-  st_as_sf()
+state.summary <- left_join(
+ states %>% as_tibble(), state.summary, by="STUSPS") %>%
+ st_as_sf()
 
 # plot key metrics
 ggplot() +
@@ -33,22 +46,25 @@ ggplot() +
          label.theme = element_text(angle = 0, size = 8)) +
   theme(legend.title = element_text(angle = 0, size=8),
          legend.text = element_text(size=7),
-         legend.position=c(0.2, 0.1),
+         legend.position=c(0.8, 0.1),
          plot.title = element_text(size=10, hjust=0.2))
 
 rm(states, state.summary)
 ```
 
-Geographic Area Coordination Centers (GACC)
+Geographic Area Coordination Centers (GACC).
 
 ```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
 
-gaccs <- st_read("../../../data/boundaries/political/GACC/natl_gacc_albers_conus.gpkg")
+gaccs <- st_read("../../../data/boundaries/political/GACC/national_gacc_current.gpkg") %>%
+ st_transform(st_crs(ics.points))
 gacc.summary <- read_csv("../../data/tabular/mod/summaries/conus_gacc_summary_key_vars.csv")
 
 # join the attributes
-gacc.summary <- inner_join(gaccs%>%as_tibble(), gacc.summary, by="GACCAbbrev") %>%
-  st_as_sf()
+gacc.summary <- left_join(
+ gaccs %>% as_tibble(), gacc.summary, by="GACCAbbrev") %>%
+ st_as_sf() %>%
+ st_transform(st_crs(ics.points))
 
 # plot key metrics
 ggplot() +
@@ -68,7 +84,7 @@ rm(gaccs, gacc.summary)
 
 ```
 
-Ecoregions (Level III)
+Ecoregions (Level III).
 
 ```{r, messages=F, warnings=F, fig.height=4, fig.width=5.5}
 
