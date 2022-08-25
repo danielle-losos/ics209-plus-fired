@@ -8,6 +8,8 @@ For each of these methods, we apply spatial and temporal threshold to the joined
 
 ![alt text](https://github.com/maxwellCcook/ics209-plus-fired/blob/main/figures/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png?raw=true)
 
+Figure 1. Structures destroyed by wildfire across CONUS and Alaska from the ICS-209-PLUS data (1999-2020)
+
 # Implications
 
 This new ICS+FIRED product represents a significant database of wildfire characteristics from both incident command and wildfire behavior perspective. The ICS209-PLUS provides detailed information including values at risk, suppression resources and tactics, incident cost, and more. The FIRED database provides a new look at fire growth characteristics such as the simple fire spread rate (acre/day) and the maximum single-day fire growth (acres) along with estimates of the timing of maximum growth, the ignition location (fuzzy), and modal landcover types. 
