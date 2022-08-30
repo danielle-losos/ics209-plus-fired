@@ -6,6 +6,10 @@ The process includes a multi-step approach using three different primary methods
 
 For each of these methods, we apply spatial and temporal threshold to the joined records such that we retain matching incidents/events which have a high confidence. Additionaly, we performed extensive manual QA/QC examining outliers and well known wildfire incidents to help refine the database. This work is on-going but is now represented in St. Denis et al. (2022), in review, and includes the high confidence joins between these two important databases. Basic validation of the resulting product involves fitting a linear model to predicted final burned acres in the ICS209-PLUS using the satellite-mapped burned acres by FIRED. With R2 values of 0.95, these methods achieve high confidence joins between these two different databases.
 
+![alt text](https://github.com/maxwellCcook/ics209-plus-fired/blob/main/figures/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png?raw=true)
+
+Figure 1. Structures destroyed by wildfire across CONUS and Alaska from the ICS-209-PLUS data (1999-2020)
+
 # Implications
 
 This new ICS+FIRED product represents a significant database of wildfire characteristics from both incident command and wildfire behavior perspective. The ICS209-PLUS provides detailed information including values at risk, suppression resources and tactics, incident cost, and more. The FIRED database provides a new look at fire growth characteristics such as the simple fire spread rate (acre/day) and the maximum single-day fire growth (acres) along with estimates of the timing of maximum growth, the ignition location (fuzzy), and modal landcover types. 
