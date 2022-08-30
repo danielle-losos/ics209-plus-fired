@@ -26,6 +26,8 @@ west <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT")
 # Load the latest ICS-209-PLUS raw tables
 # Incident Summary Reports
 incidents <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_incidents_1999to2020.csv")
+ics.points <- st_read("data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg")
+
 # # Situation Reports
 # sitreps <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_sitreps_1999to2020.csv")
 

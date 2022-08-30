@@ -11,19 +11,21 @@ source("setup.R")
 
 Bring in the spatial ics-209-plus, ICS+FIRED.
 
-```{r include=F}
+```{r include=F, warning=F}
 ics.points <- st_read("../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg")
 ics.fired <- st_read("../../data/spatial/mod/ics-fired/ics209plus_fired_combined.gpkg")
+ics.counties <- read_csv("../../data/tabular/mod/ics-spatial/ics_spatial_counties_for_pub.csv", show_col_types=F)
 ```
 
 ## Summary Figures by Regions
 
-State Administrative Units.
+State Administrative Units (using shifted Alaska from albersusa package).
 
 ```{r, messages=F, warning=F, fig.height=4, fig.width=5.5}
 
 # Read in the formatted CONUS+AK file
 library(albersusa,quietly=TRUE)
+
 # states <- st_read("../../../data/boundaries/political/TIGER/tl19_us_states_w_ak_lambert.gpkg")
 states <- usa_sf() %>%
  rename(STUSPS = iso_3166_2) %>%
@@ -50,10 +52,10 @@ map1 <- ggplot() +
          plot.title = element_text(size=10, hjust=0.2))
 map1
 # Save it
-ggsave(f1, file = "../../figs/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png",
+ggsave(map1, file = "../../figures/Westwide-PLUS_HomeLoss_byIncident_1999to2020.png",
        width=5.5, height=4, dpi = 350, bg="white") # adjust dpi accordingly
 
-rm(states, state.summary)
+rm(states, state.summary, map1)
 ```
 
 Geographic Area Coordination Centers (GACC).
@@ -127,6 +129,7 @@ rm(ecol3, eco.summary)
 Map structures destroyed and burned area.
 
 ```{r fig.height=5, fig.width=5}
+
 map1 <- ggplot() +
   geom_sf(data=ics.west.plus%>%filter(STR_DESTROYED_RES_TOTAL==0), color="gray60", size=0.3, alpha=0.9) +
   geom_sf(data=states%>%filter(STUSPS %in% states.sub), fill=NA, color="gray20") +

@@ -840,13 +840,20 @@ rm(r2,lm.fit)
 
 ```
 
-Final bind and export.
+Add in the FIRED point of origin coordinates. Final bind and export.
 
 ```{r}
 
+# Create the master table
 events.ics.master_ <- events.ics.master_ %>%
  dplyr::select(-c(pred2,pred3,pred4)) %>%
  rename(PREDICTED_ACRES = pred5)
+
+# Add in FIRED POO
+ig.coords <- st_read("../../../FIRED/data/spatial/raw/conus-ak_to2022_ig_points_wgs.gpkg")
+
+events.ics.master_ <- events.ics.master_ %>%
+ left_join(ig.coords, by="FIRED_ID")
 
 # Write out the master events data so far
 st_write(events.ics.master_, "../../data/spatial/mod/ics-fired/ics209plus_fired_combined.gpkg",

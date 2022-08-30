@@ -74,6 +74,7 @@ code/Python/.ipynb_checkpoints
 # R code to ignore
 code/archive/
 code/R/scratch.R
+code/R/complexes.R
 !*.DS_Store
 Code/.DS_Store
 .DS_Store
