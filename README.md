@@ -1,7 +1,5 @@
-[![DOI](https://zenodo.org/badge/448340109.svg)](https://zenodo.org/badge/latestdoi/448340109)
-
 # ICS209-PLUS; ICS+FIRED (Fire Events Delineation)
-
+[![DOI](https://zenodo.org/badge/448340109.svg)](https://zenodo.org/badge/latestdoi/448340109)
 This repository contains the workflow used to generate a link between Incident Command Summary Reports from the ICS209-PLUS (1999-2020) database (St. Denis et al. 2022, in review) and satellite-derived wildfire events from the Fire Events Delineation (FIRED) algorithm (Balch et al. 2020, Mahood et al. 2022).
 
 The process includes a multi-step approach using three different primary methods for spatially joining these two datasets; 1) joining based on available Monitoring Trends in Burn Severity (MTBS) footprints to identify largest overlapping FIRED events in space and time, 2) A buffer and spatial overlap approach using the latitude and longitude from the ICS209-PLUS Point of Origin (POO), and 3) a K-Nearest Neighbor index identifying incidents and events that are near in space.
