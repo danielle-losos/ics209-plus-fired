@@ -12,8 +12,10 @@ source("setup.R")
 
 ```{r warning=F}
 
-ics_counties <- read_csv("../../data/tabular/mod/ics-spatial/ics_spatial_counties_for_pub.csv")
+# Bring in ICS counties from Wildfire Spatio-temporal Database (Kathryn McConnell)
+ics_counties <- read_csv("../../data/tabular/mod/ics-spatial/ics_spatial_counties_9.1.22.csv")
 
+# Bring in counties database
 counties <- tigris::counties(state = NULL, cb = TRUE, year = 2020, class = "sf") %>%
  st_transform(st_crs(lambert.prj))
 
@@ -625,129 +627,6 @@ ggsave(combined, file = "../../figures/ics209plus_fired_case-study_ChetcoBar_Sit
 
 # Tidy up
 rm(p1,p2,p3,p4,p5,p6,p7,p8,map,sitreps,df,burndate,panel,combined,ics.poo,fired.poo,footprint)
-
-```
-
-
-## CONUS summaries map(s) using hexbin style.
-
-```{r}
-
-conus <- ggplot() +
-  geom_sf(data=states, fill=NA, color="gray20") +
-  geom_sf(data=spatial.conus %>% arrange(STR_DESTROYED_TOTAL),
-          aes(color=STR_DESTROYED_TOTAL, size=STR_DESTROYED_TOTAL), alpha=0.8) +
-  scale_size(range = c(1,6)) +
-  scale_color_viridis_c(option="inferno", trans="log10") +
-  labs(color = "Destroyed Structures") +
-  coord_sf(crs = st_crs(spatial.conus)) +
-  theme_void() +
-  guides(color = guide_colourbar(
-     position="top", barwidth = 0.4, barheight = 6, ticks=F,
-     label.position = "right", title.position = "left",
-     label.theme = element_text(angle = 0, size = 8)),
-     size="none") +
-  theme(legend.title = element_text(angle = 90, size=10),
-        legend.position=c(0.85, 0.7))
-
-conus
-
-# ggsave(map1, file = paste("../../figs/Map1-ICS209-PLUS_HomesDestroyed_Size_CONUS.png", sep=""), 
-#        width=5, height=5, dpi = 350) # adjust dpi accordingly
-
-```
-
-Hexbin map(s).
-
-```{r}
-
-# create the hex grid
-hex <- st_make_grid(
-   states, n=c(50,50), what="polygons", square=FALSE, 
-   flat_topped=TRUE, crs=st_crs(5070)) %>%
-   st_as_sf() %>%
-   mutate(HEXID = floor(as.numeric(rownames(.))))
-
-# Join to incident reports
-hex.join <- st_join(spatial.conus, hex%>%st_transform(st_crs(5070)), join=st_within)
-
-# Create the summary table
-sums <- hex.join %>% group_by(HEXID) %>%
-   st_drop_geometry() %>%
-   summarize(counts = n()) %>%
-   ungroup()
-
-# Join back to hex grid
-hex_ <- inner_join(hex%>%as_tibble(), sums, by="HEXID") %>% st_as_sf()
-
-# plot it
-hexmap.conus <- ggplot()+
-   geom_sf(data=states, color="transparent", fill="gray90", size=0.5)+
-   geom_sf(data=hex_, aes(fill=counts), color="transparent")+
-   scale_fill_viridis_c(option="inferno", trans="log10", alpha=0.9)+
-   geom_sf(data=states, color="gray30", fill="transparent", size=0.5)+
-   theme_void() +
-   guides(
-          fill = guide_colourbar(
-             position="top", barwidth = 0.4, barheight = 6, ticks=F,
-             label.position = "right", title.position = "left",
-             label.theme = element_text(angle = 0, size = 8))) +
-   labs(fill="log(Fire Counts)") +
-   theme(legend.title = element_text(angle = 90, size=10),
-         legend.position=c(0.9, 0.3))
-
-hexmap.conus
-
-# Save
-ggsave(hexmap.conus, file = paste("C:/Users/mccoo/OneDrive/mcook/ics209-plus-fired/figs/",
-                                  "ICS209-PLUS_version2.0_FireCounts_Hex_CONUS.png", sep=""),
-       width=5, height=3.5, dpi = 700, bg="white") # adjust dpi accordingly
-```
-
-Alaska.
-
-```{r}
-
-ak <- states %>% filter(STUSPS=="AK")
-
-# create the hex grid
-hex <- st_make_grid(
-   ak, n=c(50,50), what="polygons", square=FALSE, 
-   flat_topped=TRUE, crs=st_crs(5070)) %>%
-   st_as_sf() %>%
-   mutate(HEXID = floor(as.numeric(rownames(.))))
-
-# Join to incident reports
-hex.join <- st_join(spatial.ak, hex%>%st_transform(st_crs(5070)), join=st_within)
-
-# Create the summary table
-sums <- hex.join %>% group_by(HEXID) %>%
-   st_drop_geometry() %>%
-   summarize(counts = n()) %>%
-   ungroup()
-
-# Join back to hex grid
-hex_ <- inner_join(hex%>%as_tibble(), sums, by="HEXID") %>% st_as_sf()
-
-# plot it
-ggplot()+
-   geom_sf(data=hex_, aes(fill=counts), color="transparent")+
-   scale_fill_viridis_c(option="inferno", trans="log10", alpha=0.9)+
-   geom_sf(data=states, color="gray50", fill="transparent", size=0.5)+
-   theme_void() +
-   guides(fill="none")
-
-```
-
-Histogram.
-
-```{r fig.height=2, fig.width=3.5}
-
-incidents %>% group_by(START_YEAR) %>%
-   summarize(
-      counts = n()) %>%
-   ggplot(aes(x=START_YEAR, y=counts)) +
-   geom_bar(stat="identity")
 
 ```
 

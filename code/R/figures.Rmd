@@ -17,6 +17,28 @@ ics.fired <- st_read("../../data/spatial/mod/ics-fired/ics209plus_fired_combined
 ics.counties <- read_csv("../../data/tabular/mod/ics-spatial/ics_spatial_counties_for_pub.csv", show_col_types=F)
 ```
 
+Export a cleaned version of the ICS+FIRED.
+
+```{r}
+getwd()
+# Load ignition point table
+ig.points <- read_csv("../../data/tabular/mod/wf-incidents/ics209plus_fired_ig_poo_coords.csv")
+
+ics.fired_ <- ics.fired %>% 
+ st_set_geometry(NULL) %>%
+ as_tibble() %>%
+ inner_join(ig.points, by="FIRED_ID") %>%
+ rename(FIRED_ACRES = tot_ar_ac) %>%
+ mutate(FIRED_SIMPLE_FSR = fsr_km2_dy*247.105,
+        FIRED_MAX_GROWTH = mx_grw_km2*247.105) %>%
+ dplyr::select(INCIDENT_ID, FIRED_ID, FIRED_ACRES, FIRED_SIMPLE_FSR, 
+               FIRED_MAX_GROWTH, FIRED_IG_LON, FIRED_IG_LAT)
+
+# Write it out
+write_csv(ics.fired_, "../../data/tabular/mod/wf-incidents/ics209plus_fired_attributes_clean.csv")
+ 
+```
+
 ## Summary Figures by Regions
 
 State Administrative Units (using shifted Alaska from albersusa package).
@@ -1397,6 +1419,130 @@ ggsave(f7, file = paste("C:/Users/mccoo/OneDrive/mcook/ics209/figs/", "CO_Burned
 ```
 
 
+# Supp. Hexbin summaries maps
+
+```{r warning=F}
+
+conus <- ggplot() +
+  geom_sf(data=states, fill=NA, color="gray20") +
+  geom_sf(data=ics.points %>%
+           arrange(STR_DESTROYED_TOTAL),
+          aes(color=STR_DESTROYED_TOTAL, size=STR_DESTROYED_TOTAL), alpha=0.8) +
+  scale_size(range = c(1,6)) +
+  scale_color_viridis_c(option="inferno", trans="log10") +
+  labs(color = "Destroyed Structures") +
+  coord_sf(crs = st_crs(ics.points)) +
+  theme_void() +
+  guides(color = guide_colourbar(
+     position="top", barwidth = 0.4, barheight = 6, ticks=F,
+     label.position = "right", title.position = "left",
+     label.theme = element_text(angle = 0, size = 8)),
+     size="none") +
+  theme(legend.title = element_text(angle = 90, size=10),
+        legend.position=c(0.85, 0.7))
+
+conus
+
+# ggsave(map1, file = paste("../../figs/Map1-ICS209-PLUS_HomesDestroyed_Size_CONUS.png", sep=""), 
+#        width=5, height=5, dpi = 350) # adjust dpi accordingly
+
+```
+
+Hexbin map(s).
+
+```{r}
+
+# create the hex grid
+hex <- st_make_grid(
+   states, n=c(50,50), what="polygons", square=FALSE, 
+   flat_topped=TRUE, crs=st_crs(lambert.prj)) %>%
+   st_as_sf() %>%
+   mutate(HEXID = floor(as.numeric(rownames(.))))
+
+# Join to incident reports
+hex.join <- st_join(ics.points, hex %>% st_transform(st_crs(lambert.prj)), join=st_within)
+
+# Create the summary table
+sums <- hex.join %>% group_by(HEXID) %>%
+   st_drop_geometry() %>%
+   summarize(counts = n()) %>%
+   ungroup()
+
+# Join back to hex grid
+hex_ <- inner_join(hex %>% as_tibble(), sums, by="HEXID") %>% st_as_sf()
+
+# plot it
+hexmap <- ggplot()+
+   geom_sf(data=states, color="transparent", fill="gray90", size=0.5)+
+   geom_sf(data=hex_, aes(fill=counts), color="transparent")+
+   scale_fill_viridis_c(option="inferno", trans="log10", alpha=0.9)+
+   geom_sf(data=states, color="gray30", fill="transparent", size=0.5)+
+   theme_void() +
+   guides(
+          fill = guide_colourbar(
+             position="top", barwidth = 0.4, barheight = 6, ticks=F,
+             label.position = "right", title.position = "left",
+             label.theme = element_text(angle = 0, size = 8))) +
+   labs(fill="log(Fire Counts)") +
+   theme(legend.title = element_text(angle = 90, size=10),
+         legend.position=c(0.9, 0.3))
+
+hexmap
+
+# # Save
+# ggsave(hexmap, file = "../../figures/ics209plus_fired_FireCounts_Hex_CONUS.png",
+#        width=5, height=3.5, dpi = 500, bg="white") # adjust dpi accordingly
+
+```
+
+Alaska only.
+
+```{r}
+
+ak <- states %>% filter(STUSPS=="AK")
+
+# create the hex grid
+hex <- st_make_grid(
+   ak, n=c(25,25), what="polygons", square=FALSE, 
+   flat_topped=TRUE, crs=st_crs(lambert.prj)) %>%
+   st_as_sf() %>%
+   mutate(HEXID = floor(as.numeric(rownames(.))))
+
+# Join to incident reports
+hex.join <- st_join(ics.points %>% filter(STUSPS == 'AK'), 
+                    hex %>% st_transform(st_crs(lambert.prj)), 
+                    join=st_within)
+
+# Create the summary table
+sums <- hex.join %>% group_by(HEXID) %>%
+   st_drop_geometry() %>%
+   summarize(counts = n()) %>%
+   ungroup()
+
+# Join back to hex grid
+hex_ <- inner_join(hex %>% as_tibble(), sums, by="HEXID") %>% st_as_sf()
+
+# plot it
+ggplot()+
+   geom_sf(data=hex_, aes(fill=counts), color="transparent")+
+   scale_fill_viridis_c(option="inferno", trans="log10", alpha=0.9)+
+   geom_sf(data=ak, color="gray50", fill="transparent", size=0.5)+
+   theme_void() +
+   guides(fill="none")
+
+```
+
+Histogram.
+
+```{r fig.height=2, fig.width=3.5}
+
+incidents %>% group_by(START_YEAR) %>%
+   summarize(
+      counts = n()) %>%
+   ggplot(aes(x=START_YEAR, y=counts)) +
+   geom_bar(stat="identity")
+
+```
 ```{r}
 
 
