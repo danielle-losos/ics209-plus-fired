@@ -35,6 +35,7 @@ Links to data:
 * [ICS209-PLUS (1999-2020)]: Coming Soon ...
 * [FIRED Events, CONUS + AK (2001-2021)](https://scholar.colorado.edu/concern/datasets/d504rm74m); 
 * [FIREDpy GitHub Repo](https://github.com/earthlab/firedpy)
+* [MTBS Wildfire Footprints (1999-2020, CONUS and Alaska)](https://www.mtbs.gov/direct-download)
 
 # References
 
