@@ -136,7 +136,7 @@ ggplot(data=mtbs.inci, aes(x=MTBS_ACRE_DIFF)) +
  geom_histogram(bins=10,binwidth=1000)
 
 # write this file out
-st_write(mtbs.inci, "../../data/spatial/mod/ics-fired/mtbs_perims_w_incidents.gpkg", delete_dsn=T)
+st_write(mtbs.inci, "../../data/spatial/mod/ics-fired/intermediate/mtbs_perims_w_incidents.gpkg", delete_dsn=T)
 
 ```
 
@@ -247,7 +247,7 @@ if(any(duplicated(toupper(names(events.ics))))){
 }
 
 # Write to file
-st_write(events.ics,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_mtbs.gpkg",delete_dsn=TRUE)
+st_write(events.ics,"../../data/spatial/mod/ics-fired/intermediate/ics209plus_fired_by_mtbs.gpkg",delete_dsn=TRUE)
 
 # Tidy up
 rm(mtbs,df,a,b,join)
@@ -472,7 +472,7 @@ events.ics2 <- events %>%
  st_cast("MULTIPOLYGON")
 
 # Write to file
-st_write(events.ics2,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_buffer_cmplx.gpkg",delete_dsn=TRUE)
+st_write(events.ics2,"../../data/spatial/mod/ics-fired/intermediate/ics209plus_fired_by_buffer_cmplx.gpkg",delete_dsn=TRUE)
 
 # Now clean up the complex table
 # Remove MEMBER_INCIDENT_IDs that are related to any complex fires that made it through the join
@@ -607,7 +607,7 @@ events.ics3 <- events %>%
  st_cast("MULTIPOLYGON")
 
 # Write to file
-st_write(events.ics3,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_buffer_no_cmplx.gpkg",delete_dsn=TRUE)
+st_write(events.ics3,"../../data/spatial/mod/ics-fired/intermediate/ics209plus_fired_by_buffer_no_cmplx.gpkg",delete_dsn=TRUE)
 
 # Tidy
 rm(a,b,df,join,buffer,incis_no.cmplx)
@@ -767,7 +767,7 @@ events.ics4 <- events %>%
  st_cast("MULTIPOLYGON")
 
 # Write to file
-st_write(events.ics4,"../../data/spatial/mod/ics-fired/ics209plus_fired_by_buffer_remaining.gpkg",delete_dsn=TRUE)
+st_write(events.ics4,"../../data/spatial/mod/ics-fired/intermediate/ics209plus_fired_by_buffer_remaining.gpkg",delete_dsn=TRUE)
 
 # Tidy
 rm(join,df,a,b)
@@ -856,7 +856,7 @@ events.ics.master_ <- events.ics.master_ %>%
  left_join(ig.coords, by="FIRED_ID")
 
 # Write out the master events data so far
-st_write(events.ics.master_, "../../data/spatial/mod/ics-fired/ics209plus_fired_combined.gpkg",
+st_write(events.ics.master_, "../../data/spatial/mod/ics-fired/final/ics209plus_fired_combined.gpkg",
          delete_dsn=TRUE)
 
 ```

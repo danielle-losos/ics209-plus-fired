@@ -52,25 +52,13 @@ figs/
 archive/
 data/archive/
 data/spatial/mod/boundaries/
-data/spatial/mod/ics-fired/single-part_hull.gpkg
-data/spatial/mod/ics-fired/ics-fired_1km_flat-bevel.gpkg
-data/spatial/mod/ics-fired/ics-fired_west_plus.zip
-data/spatial/mod/wf-incidents/ics209plus_wf_incidents_spatial_west_1999to2020_qc.gpkg
-data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.gpkg
-data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shp
-data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.dbf
-data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shp.xml
-data/spatial/mod/wf-incidents/wf_incidents_west_bupr_summaries.shx
+data/spatial/raw/boundaries/Spatial_Boundaries_NHGIS/
+data/tabular/raw/famweb/
+data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_sitreps_1999to2020.csv
+Data/spatial/mod/ics-fired/intermediate/mtbs_perims_w_incidents.gpkg
+# File types
 !*.gpkg-shm
 !*.gpkg-wal
-data/tabular/raw/famweb/
-data/spatial/mod/ics-fired.zip
-data/spatial/raw/boundaries/Spatial_Boundaries_NHGIS/
-data/spatial/mod/ics-fired/mtbs_perims_w_incidents.gpkg
-data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_sitreps_1999to2020.csv
-
-# IPYNB checkpoints
-code/Python/.ipynb_checkpoints
 
 # R code to ignore
 code/archive/
@@ -79,6 +67,7 @@ code/R/complexes.R
 !*.DS_Store
 Code/.DS_Store
 .DS_Store
+code/Python/.ipynb_checkpoints
 
 # Misc
 figs/
