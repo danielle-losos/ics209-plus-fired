@@ -10,10 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 source("setup.R")
 ```
 
-```{r warning=F}
+```{r warning=F DO NOT RUN}
 
 # Bring in ICS counties from Wildfire Spatio-temporal Database (Kathryn McConnell)
-ics_counties <- read_csv("../../data/tabular/mod/ics-spatial/ics_spatial_counties_9.1.22.csv")
+ics_counties <- read_csv("../../data/tabular/mod/ics-spatial/For_Publication/ics_spatial_counties_9.2.22.csv")
 
 # Bring in counties database
 counties <- tigris::counties(state = NULL, cb = TRUE, year = 2020, class = "sf") %>%
@@ -40,40 +40,78 @@ counties.sf <- inner_join(counties %>% as_tibble(), counties.sum, by = "GEOID") 
 
 ```
 
-# Figure X. Fire distributions from ICS-SPATIAL (CONUS+AK, Histogram).
+Simple plot of ignition sources through time.
+
+```{r}
+incidents %>% group_by(START_YEAR, CAUSE) %>%
+ summarize(acres_burned = sum(FINAL_ACRES)) %>% na.omit() %>%
+ ggplot(aes(START_YEAR,acres_burned,fill=CAUSE)) +
+ geom_bar(stat="identity", position="stack") +
+ labs(y="Area Burned (acres)", x="Ignition Year", fill="Ign. Cause") +
+ scale_y_continuous(labels = label_number(suffix = " M", scale = 1e-6)) +
+ theme_bw(14)
+```
+
+# Figure 2. Fire distributions (counts) from ICS-SPATIAL (CONUS+AK, Histogram).
+
+Load the ICS-209-PLUS spatial points. Intersect with counties. Create key variables.
+
+```{r}
+
+ics.points <- ics.points %>% st_transform(st_crs(lambert.prj))
+
+# Bring in counties database
+counties <- tigris::counties(state = NULL, cb = TRUE, year = 2020, class = "sf") %>%
+ st_transform(st_crs(lambert.prj))
+
+ics.counties <- st_join(ics.points, counties %>% dplyr::select(GEOID), join=st_intersects) %>%
+ st_set_geometry(NULL) %>%
+ group_by(GEOID) %>%
+ summarise(FIRE_COUNT = n(),
+           STR_DESTROYED_TOTAL = sum(STR_DESTROYED_TOTAL, na.rm = TRUE),
+           FOD_FINAL_ACRES = sum(FOD_FINAL_ACRES, na.rm = TRUE),
+           STR_THREATENED = sum(STR_THREATENED_MAX, na.rm=TRUE),
+           TOTAL_PERSONNEL_SUM = sum(TOTAL_PERSONNEL_SUM, na.rm = TRUE),
+           WF_MAX_FSR = max(WF_MAX_FSR, na.rm = TRUE),
+           WF_MEAN_FSR = mean(WF_MAX_FSR, na.rm=TRUE),
+           PEAK_EVACUATIONS = sum(PEAK_EVACUATIONS, na.rm = TRUE),
+           PROJECTED_COSTS = sum(PROJECTED_FINAL_IM_COST, na.rm=TRUE))
+
+# Join back to counties
+ics.counties <- left_join(counties,ics.counties,by="GEOID")
+ 
+glimpse(ics.counties)
+
+```
 
 Map fire count for CONUS.
 
 ```{r fig.width=5.75, fig.height = 4.25}
 
-# Grab CONUS counties
-counties.sf.conus <- counties.sf %>% filter(!STUSPS %in% c("AK", "PR", "HI"))
-counties <- st_read("../../../data/boundaries/political/TIGER/tl19_us_counties_conus.gpkg") %>%
- st_transform(st_crs(lambert.prj))
-
 # Plot log fire counts
 county.map.conus <- ggplot() +
-   geom_sf(data = counties, fill = "grey", color = "gray89", lwd = 0.2) +
-   geom_sf(data = counties.sf.conus, aes(fill = FIRE_COUNT),
-           color = "gray89", lwd = 0.2) +
-   labs(title="(a) log(Fire Counts) by County (Continental United States)") +
+   geom_sf(data = counties %>% filter(!STUSPS %in% c("AK", "PR", "HI", "AS", "VI", "GU", "MP")), 
+           fill = "grey", color = "gray89", lwd = 0.05) +
+   geom_sf(data = ics.counties %>% filter(!STUSPS %in% c("AK", "PR", "HI", "AS", "VI", "GU", "MP")), 
+           aes(fill = FIRE_COUNT),
+           color = "gray89", lwd = 0.01) +
+   labs(title="(a) log(Fire Counts) by CONUS County") +
    theme_void() + 
    scico::scale_fill_scico(
       palette = "lajolla", begin = 0, na.value = "grey",
       name = "log(Fire Count)", trans = "log10") +
    guides(fill = guide_colourbar(direction = "horizontal", barwidth = 6, barheight = 0.5, 
                                  ticks=F, title.position = "top")) +
-   theme(legend.title = element_text(angle = 0, size=8),
-         legend.text = element_text(size=7),
+   theme(legend.title = element_text(angle = 0, size=7),
+         legend.text = element_text(size=6),
          legend.position=c(0.2, 0.1),
-         plot.title = element_text(size=10, hjust=0.2))
+         plot.title = element_text(size=7, hjust=0.2))
 
 county.map.conus
 
 ggsave(county.map.conus, file = "../../figures/ics209plus_fired_FireCounts_CONUS.png",
-       width=6.5, height=4.25, dpi = 500, bg="white")
-
-rm(counties.sf.conus)
+       width=6.5, height=4.25,
+       dpi = 300, bg="white")
 
 ```
 
@@ -81,40 +119,35 @@ Alaska fire count map.
 
 ```{r fig.width = 4, fig.height = 3}
 
-counties.sf.ak <- counties.sf %>% filter(STUSPS == "AK") %>%
- st_transform(st_crs("ESRI:102006"))
-counties.ak <- tigris::counties(state = NULL, cb = TRUE, year = 2020, class = "sf") %>%
- st_transform(st_crs("ESRI:102006")) %>%
- filter(STUSPS == "AK")
-
 # Plot log fire counts
 county.map.ak <- ggplot() +
-   geom_sf(data = counties.ak, fill = "grey", color = "gray89", lwd = 0.2) +
-   geom_sf(data = counties.sf.ak, aes(fill = FIRE_COUNT),
-           color = "gray89", lwd = 0.2) +
-   labs(title="(b) log(Fire Counts) by County (Alaska)") +
+   geom_sf(data = counties %>% filter(STUSPS=="AK") %>% st_transform(st_crs('EPSG:3338')), 
+           fill = "grey", color = "gray89", lwd = 0.2) +
+   geom_sf(data = ics.counties %>% filter(STUSPS=="AK") %>% st_transform(st_crs('EPSG:3338')), 
+           aes(fill = FIRE_COUNT),
+           color = "gray89", lwd = 0.01) +
+   labs(title="(b) log(Fire Counts) by Alaska County") +
    theme_void() + 
-   theme(legend.title=element_text(size=8), 
-         legend.text=element_text(size=7),
+   theme(legend.title=element_text(size=7), 
+         legend.text=element_text(size=6),
          legend.position = "bottom",
-         plot.title = element_text(size=10, hjust=0.25)) +
+         plot.title = element_text(size=7, hjust=0.25)) +
    scico::scale_fill_scico(
       palette = "lajolla", begin = 0, na.value = "grey",
       name = "log(Fire Count)", trans = "log10") +
-   guides(fill="none")
+   guides(fill="none") 
 
 county.map.ak
 
 ggsave(county.map.ak, file = "../../figures/ics209plus_fired_FireCounts_AK.png",
-       width=3.25, height=2.75, dpi = 300, bg="white") # adjust dpi accordingly
-
-rm(counties.sf.ak, counties.ak)
-
+       width=3.25, height=2.25,
+       dpi = 300, bg="white") # adjust dpi accordingly
+ 
 ```
 
 Histogram.
 
-```{r fig.height=2.25, fig.width=3.25}
+```{r fig.height=2.25, fig.width=3.25, warning=F, message=F}
 
 df <- incidents %>%
    mutate(
@@ -140,10 +173,10 @@ histo <- ggplot(data=df, aes(x=START_YEAR, y=counts, fill=as.factor(HIST))) +
         fill="") +
    theme_minimal() +
    theme(
-      plot.title = element_text(size=10, hjust=0.1),
-      axis.title = element_text(size=8),
-      axis.text.x = element_text(size=7,angle=35),
-      axis.text.y = element_text(size=7),
+      plot.title = element_text(size=7, hjust=0.1),
+      axis.title = element_text(size=6),
+      axis.text.x = element_text(size=5,angle=35),
+      axis.text.y = element_text(size=5),
       legend.position = c(0.12, 0.85),
       legend.text = element_text(size=6),
       legend.key.size = unit(0.8,"line")
@@ -152,7 +185,8 @@ histo <- ggplot(data=df, aes(x=START_YEAR, y=counts, fill=as.factor(HIST))) +
 histo
 
 ggsave(histo, file = "../../figures/ics209plus_fired_FireCounts_Histogram.png",
-       width=3, height=2, dpi = 300, bg="white") 
+       width=3.25, height=2.25,
+       dpi = 300, bg="white") 
 
 rm(df)
 
@@ -163,14 +197,23 @@ Combine.
 ```{r fig.height = 5.25, fig.width = 6.5}
 
 combined <- ggpubr::ggarrange(
-   county.map.conus, ggpubr::ggarrange(county.map.ak, histo, ncol=2), nrow=2
+   county.map.conus, 
+   ggpubr::ggarrange(county.map.ak, histo, ncol=2), nrow=2, align="v"
 )
 combined
 
-ggsave(combined, file = "../../figures/ics209plus_fired_FireCounts_Panel.png",
-       width=6.5, height=5.25, dpi = 500, bg="white") # adjust dpi accordingly
+# ggarrange(county.map.conus,                                                 # First row with scatter plot
+#           ggarrange(county.map.ak, histo, ncol=2, labels = c("B", "C")), # Second row with box and dot plots
+#           nrow = 2, 
+#           labels = "A"                                        # Labels of the scatter plot
+#           ) 
 
-rm(combined)
+
+ggsave(combined, file = "../../figures/ics209plus_fired_FireCounts_Panel.png",
+       # width=6.5, height=5.25, 
+       dpi = 300, bg="white") # adjust dpi accordingly
+
+# rm(combined, county.map.conus, county.map.ak, histo)
 
 ```
 
@@ -179,173 +222,178 @@ rm(combined)
 ```{r}
 
 # Grab CONUS counties
-counties.sf.conus <- counties.sf %>% filter(!STUSPS %in% c("AK", "PR", "HI"))
-counties.conus <- st_read("../../../data/boundaries/political/TIGER/tl19_us_counties_conus.gpkg") %>%
+counties.conus <- counties %>% 
+ filter(!STUSPS %in% c("AK", "PR", "HI", "AS", "VI", "GU", "MP")) %>%
  st_transform(st_crs(lambert.prj))
+
+ics.counties.conus <- ics.counties %>% 
+ filter(!STUSPS %in% c("AK", "PR", "HI", "AS", "VI", "GU", "MP"))
 
 # Total acres
 acres <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(FOD_FINAL_ACRES)),
-          color = "gray89", lwd = 0.2) +
+          color = "gray79", size = 0.01) +
   labs(title="(a) Burned area (acres)") +
   theme_void() + 
   scico::scale_fill_scico(
     palette = "lajolla", begin = 0, na.value = "grey",
-    name = "log(Burned Acres)") +
-  theme(legend.title=element_text(size=6), 
+    name = "Burned acres (log scale)") +
+  theme(legend.title=element_text(size=5), 
         legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title = element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
                                 title.position="top",
-                                barwidth = 4.25, barheight = 0.6))
+                                ticks=F,
+                                barwidth = 4.25, barheight = 0.5))
 ggsave(acres, file = "../../figures/ics209plus_fired_KeyVars_Acres.png",
-       width=3.25, height=2.75, dpi = 350, bg="white") 
+       width=3.25, height=2.5, bg="white") 
 
 # Max spread rate
 fsr <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(WF_MAX_FSR)),
-          color = "gray89", lwd = 0.2) +
-  labs(title = "(b) Max spread rate (acres/day)") +
+          color = "gray79", size = 0.01) +
+  labs(title = "(b) Max fire spread rate (acres/day)") +
   theme_void() + 
   scico::scale_fill_scico(palette = "lajolla",
                           begin = 0,
                           na.value = "grey",
-                          name = "log(Max. Spread Rate)") +
-  theme(legend.title=element_text(size=6), 
+                          name = "Max spread rate (log scale)") +
+  theme(legend.title=element_text(size=5), 
         legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title=element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
-                                title.position="top",
-                                barwidth = 4.25, barheight = 0.6)) 
+                                title.position="top", ticks=F,
+                                barwidth = 4.25, barheight = 0.5)) 
 ggsave(fsr, file = "../../figures/ics209plus_fired_KeyVars_FSR.png",
-       width=3.25, height=2.75, dpi = 350, bg="white")
+       width=3.25, height=2.5, bg="white")
 
 # Threatened structures
 threat <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(STR_THREATENED)),
-          color = "gray89", lwd = 0.2) +
+          color = "gray79", size = 0.01) +
   labs(title="(e) Total structures threatened") +
   theme_void() + 
   scico::scale_fill_scico(palette = "lajolla",
                           begin = 0,
                           na.value = "grey",
-                          name = "log(Structures Threatened)") +
-  theme(legend.title=element_text(size=6), 
+                          name = "Structures threatened (log scale)") +
+  theme(legend.title=element_text(size=5), 
         legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title=element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
-                                title.position="top",
-                                barwidth = 4.25, barheight = 0.6)) 
+                                title.position="top", ticks=F,
+                                barwidth = 4.25, barheight = 0.5)) 
 ggsave(threat, file = "../../figures/ics209plus_fired_KeyVars_Threat.png",
-       width=3.25, height=2.75, dpi = 350, bg="white")
+       width=3.25, height=2.5, bg="white")
 
 
 # Structures destroyed (log)
 struct <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(STR_DESTROYED_TOTAL)),
-          color = "gray89", lwd = 0.2) +
+          color = "gray79", size = 0.01) +
   labs(title="(f) Total structures destroyed") +
   theme_void() +
   scico::scale_fill_scico(palette = "lajolla",
                           begin = 0,
                           na.value = "grey",
-                          name = "log(Structures Destroyed)") +
-  theme(legend.title=element_text(size=6), 
+                          name = "Structures destroyed (log scale)") +
+  theme(legend.title=element_text(size=5), 
         legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title=element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
-                                title.position="top",
-                                barwidth = 4.25, barheight = 0.6)) 
+                                title.position="top", ticks=F,
+                                barwidth = 4.25, barheight = 0.5)) 
 ggsave(struct, file = "../../figures/ics209plus_fired_KeyVars_Destr.png",
-       width=3.25, height=2.75, dpi = 350, bg="white") 
+       width=3.25, height=2.5, bg="white") 
 
 
 # Personnel costs
 personnel <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(TOTAL_PERSONNEL_SUM)),
-          color = "gray89", lwd = 0.2) +
+          color = "gray79", size = 0.01) +
   labs(title="(c) Total assigned personnel") +
   theme_void() + 
   scico::scale_fill_scico(palette = "lajolla",
                           begin = 0,
                           na.value = "grey",
                           name = "log(Assigned Personnel)") +
-  theme(legend.title=element_text(size=6), 
-        legend.text=element_text(size=6),
+  theme(legend.title=element_text(size=5), 
+        legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title=element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
-                                title.position="top",
-                                barwidth = 4.25, barheight = 0.6)) 
+                                title.position="top", ticks=F,
+                                barwidth = 4.25, barheight = 0.5)) 
 ggsave(personnel, file = "../../figures/ics209plus_fired_KeyVars_Personnel.png",
-       width=3.25, height=2.75, dpi = 350, bg="white")
+       width=3.25, height=2.5, bg="white")
+
 
 # Projected IM costs
 cost <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(PROJECTED_COSTS)),
-          color = "gray89", lwd = 0.2) +
+          color = "gray79", size = 0.01) +
   labs(title="(c) Projected IM costs ($)") +
   theme_void() + 
   scico::scale_fill_scico(palette = "lajolla",
                           begin = 0,
                           na.value = "grey",
-                          name = "log(Projected Costs)") +
-  theme(legend.title=element_text(size=6), 
+                          name = "Projected costs (log scale)") +
+  theme(legend.title=element_text(size=5), 
         legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title=element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
-                                title.position="top",
-                                barwidth = 4.25, barheight = 0.6)) 
+                                title.position="top", ticks=F,
+                                barwidth = 4.25, barheight = 0.5)) 
 ggsave(cost, file = "../../figures/ics209plus_fired_KeyVars_ProjCost.png",
-       width=3.25, height=2.75, dpi = 350, bg="white")
+       width=3.25, height=2.5, bg="white")
 
 
 # Peak evacuations
 evacuation <- ggplot() +
-  geom_sf(data = counties.conus, fill = "grey", color = "gray89", lwd = 0.2) +
-  geom_sf(data = counties.sf.conus, 
+  geom_sf(data = counties.conus, fill = "grey", color = "gray79", size = 0.01) +
+  geom_sf(data = ics.counties.conus, 
           aes(fill = log(PEAK_EVACUATIONS)),
-          color = "gray89", lwd = 0.2) +
+          color = "gray79", size = 0.01) +
   labs(title="(d) Total evacuations (2014-2020)") +
   theme_void() + 
   scico::scale_fill_scico(palette = "lajolla",
                           begin = 0,
                           na.value = "grey",
-                          name = "log(Total Evacuations)") +
-  theme(legend.title=element_text(size=6), 
+                          name = "Total evacuations (log scale)") +
+  theme(legend.title=element_text(size=5), 
         legend.text=element_text(size=5),
         legend.position=c(0.2, 0.1),
         plot.title=element_text(size=7)) +
   guides(fill = guide_colourbar(direction = "horizontal",
                                 label.position = "bottom",
-                                title.position="top",
-                                barwidth = 4.25, barheight = 0.6)) 
+                                title.position="top", ticks=F,
+                                barwidth = 4.25, barheight = 0.5)) 
 ggsave(evacuation, file = "../../figures/ics209plus_fired_KeyVars_Evac.png",
-       width=3.25, height=2.75, dpi = 350, bg="white")
-
+       width=3.25, height=2.5, bg="white")
+# dpi = 300, 
 ```
  
 Arrange.
@@ -357,12 +405,12 @@ combined <- ggpubr::ggarrange(
   acres, fsr, cost, evacuation, threat, struct,
   nrow=3, ncol=2, align="hv"
 ) +
-  theme(plot.margin = margin(0.2,0.2,0.2,0.2))
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5))
 # combined
 
 ggsave(combined, file = "../../figures/ics209plus_fired_KeyVars_6Panel.png",
-       width=7.25, height=9.50, dpi = 500, bg="white") 
-
+       dpi = 300, bg="white") 
+# width=7.25, height=9.50, 
 ```
 
 # Figure 4. 2017 Chetco Bar Fire Case Study
@@ -623,7 +671,7 @@ combined <- ggpubr::ggarrange(
 combined
 
 ggsave(combined, file = "../../figures/ics209plus_fired_case-study_ChetcoBar_SitReps_wMap.png",
-       width=8, height=5.5, dpi = 650, bg="white") 
+       width=8, height=5.5, dpi = 300, bg="white") 
 
 # Tidy up
 rm(p1,p2,p3,p4,p5,p6,p7,p8,map,sitreps,df,burndate,panel,combined,ics.poo,fired.poo,footprint)

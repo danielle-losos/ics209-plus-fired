@@ -11,39 +11,10 @@ knitr::opts_chunk$set(echo = TRUE)
 source("setup.R")
 ```
 
-First, we create a spatial SF points object from the Point of Origin (POO) coordinates.
-
 ```{r warning=F}
 
-# incident.pts <- incidents %>%
-#  rename(GID='...1') %>%
-#  mutate(POO_LONGITUDE = if_else(is.na(POO_LONGITUDE), LRGST_FOD_LONGITUDE, POO_LONGITUDE),
-#         POO_LATITUDE = if_else(is.na(POO_LATITUDE), LRGST_FOD_LATITUDE, POO_LATITUDE)) %>%
-#  # remove rows with missing coordinates
-#  filter(!is.na(POO_LONGITUDE)) %>%
-#  # convert to spatial object
-#  st_as_sf(coords=c("POO_LONGITUDE", "POO_LATITUDE"),crs=wgs.prj) %>%
-#  # retain coordinates
-#  mutate(POO_LONGITUDE = unlist(map(.$geometry,1)),
-#         POO_LATITUDE = unlist(map(.$geometry,2))) %>%
-#  # ensure transformation to WGS
-#  st_set_crs(st_crs(wgs.prj)) %>%
-#  # perform an intersection with our states (removing invalid points)
-#  st_intersection(., states%>%dplyr::select(STUSPS)) %>%
-#  # cast to point
-#  st_cast("POINT") %>%
-#  st_transform(st_crs(lambert.prj))
-# # Write
-# st_write(incident.pts,
-#          "../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg",
-#          driver="GPKG",delete_dsn=T)
-
-```
-
-```{r warning=F}
-
-# Load the spatial points
-incident.pts <- st_read("../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_1999to2020.gpkg") %>%
+# Tidy the ICS points
+ics.pts <- ics.pts %>%
  # Filter 2001-2020 to match FIRED
  filter(START_YEAR>=2001) %>%
  # Remove some known "problem fires"
@@ -54,7 +25,7 @@ incident.pts <- st_read("../../data/spatial/raw/wf-incidents/ics-209-plus-2.0/ic
 
 # plot an example (Colorado)
 ggplot() +
- geom_sf(data=incident.pts %>% filter(STUSPS=="CO") %>% arrange(FINAL_ACRES), 
+ geom_sf(data=ics.pts %>% filter(STUSPS=="CO") %>% arrange(FINAL_ACRES), 
          aes(color=FINAL_ACRES, size=FINAL_ACRES)) +
  viridis::scale_color_viridis(option="inferno",trans="log10") +
  scale_size(range = c(0.5,8)) +
@@ -78,16 +49,15 @@ Join these records to MTBS perimeters, where possible. Keep only unique rows (i.
 ```{r}
 
 # Load the complex associations tables
-complex <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_complex_associations_1999to2020.csv")
-cmplx14 <- read_csv("data/tabular/raw/wf-incidents/ics-209-plus-2.0/cpx-assocs-2014-2020.csv")
+complex <- 
+ read_csv("../../data/tabular/raw/wf-incidents/ics209-plus_v2.0/ics209plus-wildfire/ics209-plus-wf_complex_associations_1999to2020.csv")
 
 # Isolate incidents which were not managed as complexes
-no.cmplx <- incident.pts %>% 
+no.cmplx <- ics.pts %>% 
  # Filter incidents with 0 acres
  filter(FINAL_ACRES!=0,
         # remove incidents found in the complex associations table
         !INCIDENT_ID %in% complex$MEMBER_INCIDENT_ID,
-        !INCIDENT_ID %in% cmplx14$MEMBER_INCIDENT_ID,
         # filter to fires where FPA-FOD shows 1 event or NULL
         FOD_FIRE_NUM==1 | is.na(FOD_FIRE_NUM))
 
@@ -112,7 +82,7 @@ no.cmplx <- no.cmplx %>% st_transform(st_crs(lambert.prj))
 
 # Join by "Event_ID"
 mtbs.inci <- inner_join(
- no.cmplx %>% as_tibble() %>% dplyr::select(-geom),
+ no.cmplx %>% as_tibble() %>% dplyr::select(-geometry),
  mtbs %>% as_tibble(), by="Event_ID"
 ) %>%
  # Handle duplicate MTBS perims

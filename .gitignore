@@ -50,15 +50,21 @@ figs/
 
 # Data folders
 archive/
+data/spatial/
+data/tabular/
 data/archive/
 data/spatial/mod/boundaries/
 data/spatial/raw/boundaries/Spatial_Boundaries_NHGIS/
 data/tabular/raw/famweb/
 data/tabular/raw/wf-incidents/ics-209-plus-2.0/ics209-plus-wf_sitreps_1999to2020.csv
-Data/spatial/mod/ics-fired/intermediate/mtbs_perims_w_incidents.gpkg
+data/spatial/mod/ics-fired/intermediate/mtbs_perims_w_incidents.gpkg
+data/tabular/mod/ics-spatial/For_Publication
+data/tabular/mod/ics-spatial/For_Publication/
+
 # File types
 !*.gpkg-shm
 !*.gpkg-wal
+
 
 # R code to ignore
 code/archive/
