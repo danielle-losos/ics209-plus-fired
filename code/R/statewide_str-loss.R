@@ -105,3 +105,24 @@ print(ft, preview = "docx")
 write_csv(state.summary, paste0(icsdir,"tabular/mod/ics209plus_1999-2022_west_str_loss.csv"))
 
 
+###################
+# Plot of CA structure loss rate by year
+
+ca.summary <- ics %>%
+ filter(POO_STATE == "CA") %>%
+ group_by(START_YEAR) %>%
+ summarize(
+  str_destroyed_total = as.integer(sum(STR_DESTROYED_TOTAL)),
+  str_destroyed_res = as.integer(sum(STR_DESTROYED_RES_TOTAL)),
+  area_burned_total = sum(FINAL_ACRES * 0.00404686),  # in km2
+  str_loss_rate = str_destroyed_total / area_burned_total
+ )
+
+# Bar chart
+ggplot(data=ca.summary, aes(x=START_YEAR, y=str_loss_rate)) +
+ geom_bar(stat="identity", fill="darkred", color="black") +
+ labs(x="Fire Year", y="Structure Loss Rate (#/km2)",
+      title="Structure Loss Rate by Fire Year in California (1999-2022)") +
+ theme_bw()
+
+
