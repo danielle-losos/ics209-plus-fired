@@ -6,7 +6,6 @@ library(lubridate)
 library(scales)
 library(ggpubr)
 library(grid)
-###################
 
 ################################
 # Set up the parallel processing
@@ -18,9 +17,9 @@ cl = makeCluster(parallel::detectCores()-1, type = "SOCK")
 registerDoParallel(cl) 
 getDoParWorkers() 
 
-############################
+################################
+# Environment variables and data
 
-## Environment variables and data
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 setwd("../../")
 
@@ -33,12 +32,13 @@ wgs.prj <- '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
 
 # STUSPS for 11 Western US states
 west <- c("AZ", "CO", "NV", "WY", "CA", "ID", "WA", "OR", "NM", "MT", "UT")
+
 # Bring in state boundaries (w/Alaska)
 states <- st_read("../data/boundaries/political/TIGER/tl19_us_states_w_ak_lambert.gpkg") %>%
  st_transform(st_crs(wgs.prj))
 
 # Load the latest ICS-209-PLUS raw tables
-ics209 <- read_csv("data/tabular/raw/wf-incidents/ics209-plus_v2.0/ics209plus-wildfire/ics209-plus-wf_incidents_1999to2020.csv")
+ics209 <- read_csv("data/tabular/raw/wf-incidents/ics209-plus_v2/ics209plus-wildfire/ics209-plus-wf_incidents_1999to2020.csv")
 
 # Convert to spatial points
 ics.pts <- ics209 %>%
@@ -59,17 +59,19 @@ ics.pts <- ics209 %>%
  # cast to point
  st_cast("POINT") %>%
  st_transform(st_crs(lambert.prj))
+
 # Write
 st_write(ics.pts,
-         "data/spatial/raw/wf-incidents/ics-209-plus-2.0/ics209plus-wf_incidents_spatial_us_ak_1999to2020.gpkg",
+         "data/spatial/raw/wf-incidents/ics209-plus_v2/ics209plus-wf_incidents_spatial_us_ak_1999to2020.gpkg",
          driver="GPKG",delete_dsn=T)
 
+rm(ics209)
 
 # # Situation Reports
 # sitreps <- read_csv("data/tabular/raw/wf-incidents/ics209-plus_v2.0/ics209plus-wildfire/ics209-plus-wf_sitreps_1999to2020.csv")
 
 # Load the latest FIRED data (manually QC'd)
-events <- st_read("../FIRED/data/spatial/mod/event-updates/conus-ak_to2022_events_qc.gpkg") %>%
+events <- st_read("../FIRED/data/spatial/raw/event-updates/conus-ak_to2022_events_qc.gpkg") %>%
  dplyr::select(-c(x,y)) %>%
  distinct(., id, .keep_all=TRUE)
 

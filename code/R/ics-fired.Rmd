@@ -11,6 +11,19 @@ knitr::opts_chunk$set(echo = TRUE)
 source("setup.R")
 ```
 
+```{r include=F}
+alt_path <- "../../../FIRED/data/spatial/raw/events/toMay2021/fired_conus-ak_nov2001-march2021/"
+# Load the alternate FIRED dataset
+events <- st_read(paste0(alt_path,"fired_conus-ak_events_nov2001-march2021.gpkg")) %>%
+ filter(ig_year >= 2001 | ig_year < 2021) %>%
+ st_transform(st_crs(lambert.prj))
+
+# Remove the old FIRED ID
+ics.pts <- ics.pts %>%
+ select(-c(FIRED_ID,FIRED_ACRES,FIRED_SIMPLE_FSR,FIRED_MAX_GROWTH,FIRED_IG_LON,FIRED_IG_LAT))
+```
+
+
 ```{r warning=F}
 
 # Tidy the ICS points
@@ -46,11 +59,12 @@ Now, we create a subset of wildfires that were not managed as complex incidents.
 
 Join these records to MTBS perimeters, where possible. Keep only unique rows (i.e., remove rows where the MTBS perimeter is duplicated) and where the difference in recorded burn acres is less than 30,000. This ensure we are retaining only "high-confidence" joins. 
 
-```{r}
+```{r message=F}
 
 # Load the complex associations tables
 complex <- 
- read_csv("../../data/tabular/raw/wf-incidents/ics209-plus_v2.0/ics209plus-wildfire/ics209-plus-wf_complex_associations_1999to2020.csv")
+ read_csv("../../data/tabular/raw/wf-incidents/ics209-plus_v2.0/ics209plus-wildfire/ics209-plus-wf_complex_associations_1999to2020.csv",
+          show_col_types = FALSE)
 
 # Isolate incidents which were not managed as complexes
 no.cmplx <- ics.pts %>% 
@@ -103,7 +117,8 @@ mtbs.inci <- inner_join(
 # Check the histogram of acre difference
 summary(mtbs.inci$MTBS_ACRE_DIFF)
 ggplot(data=mtbs.inci, aes(x=MTBS_ACRE_DIFF)) + 
- geom_histogram(bins=10,binwidth=1000)
+ geom_histogram(bins=10,binwidth=1000,fill="blue") +
+ theme_bw()
 
 # write this file out
 st_write(mtbs.inci, "../../data/spatial/mod/ics-fired/intermediate/mtbs_perims_w_incidents.gpkg", delete_dsn=T)
@@ -259,7 +274,7 @@ centroid <- events %>%
  st_centroid() %>%
  st_transform(st_crs(lambert.prj))
 
-pts <- incident.pts%>%filter(INCIDENT_ID %in% events.ics$INCIDENT_ID)
+pts <- ics.pts%>%filter(INCIDENT_ID %in% events.ics$INCIDENT_ID)
 
 nn <- st_nn(pts, centroid, k=1, returnDist = T)
 
@@ -288,43 +303,17 @@ First, do some cleaning. Isolate complex fires, handle manual edits.
 # Isolate complex fires
 # Handle some of the known "duplicates"
 
-# Read in the updated complex assoc. table (2014-2020)
-# Retrieve only the complex INCIDENT_ID from the spatial points
-cmplx14 <- cmplx14 %>%
- # Remove "problem" fires if known
- filter(MEMBER_INCIDENT_ID != "2017_7211255_REDWOOD VALLEY INCIDENT")
-
-# Merge 1999-2013 and 2014-2020 complex records
-cmplx1 <- incident.pts %>%
- filter(INCIDENT_ID %in% cmplx14$CPLX_INCIDENT_ID)
-cmplx2 <- incident.pts %>%
- filter(START_YEAR<2014, 
-        INCIDENT_ID %in% complex$CPLX_INCIDENT_ID)
-
-# Bind them together
-cmplx3 <- bind_rows(cmplx1,cmplx2)
+cmplx <- ics.pts %>%
+ filter(INCIDENT_ID %in% complex$CPLX_INCIDENT_ID)
 
 # Also add in fires where FOD_FIRE_NUM > 1
-cmplx4 <- incident.pts %>%
- filter(!INCIDENT_ID %in% cmplx3$INCIDENT_ID,
+cmplx <- ics.pts %>%
+ filter(!INCIDENT_ID %in% cmplx$INCIDENT_ID,
         FOD_FIRE_NUM > 1)
 
-# Final bind
-cmplx <- bind_rows(cmplx3,cmplx4)
-
 # Create the member ID table
-cmplx.member <- incident.pts %>%
- filter(
-  INCIDENT_ID %in% cmplx14$MEMBER_INCIDENT_ID)
-temp <- incident.pts %>%
- filter(
-  START_YEAR < 2014,
-  INCIDENT_ID %in% complex$MEMBER_INCIDENT_ID)
-# Bind together
-cmplx.member <- bind_rows(cmplx.member,temp)
-
- # Tidy up
-rm(cmplx1,cmplx2,cmplx3,cmplx4,temp)
+cmplx.member <- ics.pts %>%
+ filter(INCIDENT_ID %in% complex$MEMBER_INCIDENT_ID)
 
 ```
 
@@ -446,12 +435,8 @@ st_write(events.ics2,"../../data/spatial/mod/ics-fired/intermediate/ics209plus_f
 
 # Now clean up the complex table
 # Remove MEMBER_INCIDENT_IDs that are related to any complex fires that made it through the join
-cmplx.rem <- cmplx14 %>%
+cmplx.rem <- complex %>%
  filter(!CPLX_INCIDENT_ID %in% events.ics2$INCIDENT_ID)
-temp <- complex %>%
- filter(!CPLX_INCIDENT_ID %in% cmplx.rem$CPLX_INCIDENT_ID,
-        !CPLX_INCIDENT_ID %in% events.ics2$INCIDENT_ID)
-cmplx.rem <- bind_rows(cmplx.rem,temp)
 
 # Tidy up
 rm(a,b,buffer,df,join2,temp)
