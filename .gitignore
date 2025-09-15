@@ -1,3 +1,11 @@
+# Data files
+# Large MTBS and MODIS data folders
+data/spatial/raw/mtbs/
+data/spatial/raw/modis/
+data/tabular/raw/ICS
+*.tif
+*.tiff
+
 # History files
 .Rhistory
 .Rapp.history
