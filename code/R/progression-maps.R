@@ -229,8 +229,8 @@ p1 <- df %>%
    scale_fill_fermenter(palette = "Reds", direction = 1, n.breaks = 5) +
  # Add the fire boundary
  geom_sf(data=fire, fill="transparent", color="gray30", lwd=0.45) +
-   # Add ignition point (first MODIS observation)
-   geom_sf(data=ignition_point, aes(shape="First Detection"), color="black", size=4) +  # Black diamond
+  # Add ignition point (first MODIS observation)
+  geom_sf(data=ignition_point, aes(shape="First Detection"), color="black", size=8) +  # Black diamond (100% larger)
  coord_sf() +
   labs(fill="Days Since Ignition", shape="", x="", y="", title="", tag="(a)") +
    scale_shape_manual(values=c("First Detection"=18), labels=first_detection_label) +
@@ -248,13 +248,13 @@ p1 <- df %>%
                                barwidth = 18, barheight = 0.6,
                                ticks=TRUE, draw.llim=FALSE, order = 1),
          shape = guide_legend(title.position="top", title.hjust = 0.5, order = 2)) +
- ggspatial::annotation_scale(location = "br", width_hint = 0.1,
+ ggspatial::annotation_scale(location = "br", width_hint = 0.15,
                              pad_x = unit(0.2,"in"), pad_y = unit(0.2,"in"),
-                             line_width = 0.5, text_pad = unit(0.15,"cm"),
-                             height = unit(0.15,"cm")) +
+                             line_width = 1.5, text_pad = unit(0.2,"cm"),
+                             height = unit(0.25,"cm"), text_cex = 1.2) +
  ggspatial::annotation_north_arrow(location = "br", which_north = "true",
-                                   pad_x = unit(0.3,"in"), pad_y= unit(0.4,"in"),
-                                   width = unit(0.8,"cm"), height = unit(0.8,"cm"),
+                                   pad_x = unit(0.3,"in"), pad_y= unit(0.6,"in"),
+                                   width = unit(2.2,"cm"), height = unit(2.2,"cm"),
                                    style = north_arrow_fancy_orienteering)
   print(p1)
   
@@ -364,12 +364,14 @@ sitrep_p1 <- ggplot() +
   scale_y_continuous(labels = scales::label_number(suffix = " K", scale = 1e-3)) +
   scale_x_date(date_labels = "%b %d", date_breaks = "10 days", date_minor_breaks = "2 days") + 
   labs(y="Acres/Day", x="",
-       title="Simple Fire Spread Rate (acres/day)", tag="(b)") +
+       title="Simple Fire Spread Rate (acr/day)", tag="(b)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=1, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p1
 
 # Burned Area
@@ -383,12 +385,14 @@ sitrep_p2 <- ggplot() +
   scale_y_continuous(labels = scales::label_number(suffix = " K", scale = 1e-3)) +
   scale_x_date(date_labels = "%b %d", date_breaks = "10 days", date_minor_breaks = "2 days") + 
   labs(y="Acres", x="",
-       title="Burned Area (acres)", tag="(c)") +
+       title="Burned Area (acr)", tag="(c)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p2
 
 # Threatened Structures
@@ -404,10 +408,12 @@ sitrep_p3 <- ggplot() +
   labs(y="# Structures", x="",
        title="Threatened Structures", tag="(e)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p3
 
 # Destroyed Structures
@@ -422,10 +428,12 @@ sitrep_p4 <- ggplot() +
   labs(y="# Structures", x="",
        title="Destroyed Structures", tag="(f)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p4
 
 # Total Evacuations
@@ -436,14 +444,17 @@ sitrep_p5 <- ggplot() +
              shape=21, size = 2.4, stroke = 0.5, alpha=0.8) +
   scale_fill_manual(values = reds_palette, name = "Days Since Ignition", guide = "none") +
   scale_color_manual(values = reds_palette, guide = "none") +
+  scale_y_continuous(labels = scales::label_number(suffix = "K", scale = 1e-3)) +
   scale_x_date(date_labels = "%b %d", date_breaks = "10 days", date_minor_breaks = "2 days") +
   labs(y="# Evacuations", x="",
        title="Total Evacuations", tag="(g)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p5
 
 # Total Personnel
@@ -455,13 +466,15 @@ sitrep_p6 <- ggplot() +
   scale_fill_manual(values = reds_palette, name = "Days Since Ignition", guide = "none") +
   scale_color_manual(values = reds_palette, guide = "none") +
   scale_x_date(date_labels = "%b %d", date_breaks = "10 days", date_minor_breaks = "2 days") +
-  labs(y="# Personnel", x="",
+  labs(y="# Personnel", x="Report Date",
        title="Total Personnel", tag="(d)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p6
 
 # Total Aerial Resources
@@ -476,10 +489,12 @@ sitrep_p7 <- ggplot() +
   labs(y="# Aerial", x="Report Date",
        title="Total Aerial Resources", tag="(e)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p7
 
 # Projected Final IM Cost
@@ -495,58 +510,108 @@ sitrep_p8 <- ggplot() +
   labs(y="Cost ($)", x="Report Date",
        title="Projected Final IM Cost", tag="(h)") +
   theme_classic() +
-  theme(plot.title = element_text(size=8, vjust=0.2, hjust=0.5, face="bold"),
-        axis.title = element_text(size = 7),
-        axis.text.y = element_text(size=6),
-        axis.text.x = element_text(size=6, angle=35))
+  theme(plot.title = element_text(size=12, vjust=0.2, hjust=0.5, face="bold"),
+        axis.title = element_text(size = 10),
+        #axis.title.x = element_text(margin = margin(t = 8)),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11, angle=15),
+        plot.margin = margin(t = 0, r = 5, b = 0, l = 5, unit = "pt"))
 sitrep_p8
 
 # ============================================================================
-# CREATE COMPOSITE FIGURE
+# CREATE COMPOSITE FIGURES
 # ============================================================================
 
-# Create ICS-209 situation report panel
-# Create two ICS-209 panels (4 plots each)
+# Create ICS-209 situation report panels
+# ORIGINAL VERSION: Create two ICS-209 panels (4 plots each)
 # Panel 1: Fire spread, burned area, total personnel, aerial resources
 sitrep_panel_1 <- (sitrep_p1 + sitrep_p2 + sitrep_p6 + sitrep_p7) + 
   plot_layout(ncol = 1)
+sitrep_panel_1
 
 # Panel 2: Threatened structures, destroyed structures, total evacuations, projected final IM cost
 sitrep_panel_2 <- (sitrep_p3 + sitrep_p4 + sitrep_p5 + sitrep_p8) + 
   plot_layout(ncol = 1)
+sitrep_panel_2
 
-# Create composite figure with fire progression map and situation reports
+# SIX-CHART VERSION: Remove aerial resources and threatened structures
+# Panel 1: Fire spread, burned area, total personnel
+sitrep_panel_1_6chart <- (sitrep_p1 + plot_spacer() + sitrep_p2 + plot_spacer() + sitrep_p6) + 
+  plot_layout(ncol = 1, heights = c(4, -0.8, 4, -0.8, 4))
+sitrep_panel_1_6chart
+
+# Panel 2: Destroyed structures, total evacuations, projected final IM cost
+sitrep_panel_2_6chart <- (sitrep_p4 + plot_spacer() + sitrep_p5 + plot_spacer() + sitrep_p8) + 
+  plot_layout(ncol = 1, heights = c(4, -0.8, 4, -0.8, 4))
+sitrep_panel_2_6chart
+
+# Create composite figures with fire progression map and situation reports
 if (exists("p1")) {  # Check if fire progression map was created successfully
+  
+  # ORIGINAL 8-CHART COMPOSITE FIGURE
   composite_figure <- p1 + sitrep_panel_1 + sitrep_panel_2 + 
     plot_layout(ncol = 3, widths = c(1.5, 0.5, 0.5)) +
     plot_annotation(
       title = paste("East Troublesome Fire -", target_fire_year),
       subtitle = "Fire progression map (left) and ICS-209+ situation report data (center and right)",
       theme = theme(
-        plot.title = element_text(size = 16, face = "bold"),
-        plot.subtitle = element_text(size = 12)
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16)
       )
     )
   
-  # Save the composite figure
+  # Save the original composite figure
   composite_figure
   composite_output <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_composite_analysis.png"))
   ggsave(composite_figure, filename = composite_output, 
          width = 16, height = 10, dpi = 300, bg = "white")
-  cat("Composite figure saved to:", composite_output, "\n")
+  cat("Original composite figure (8 charts) saved to:", composite_output, "\n")
   
-  # Also save individual sitrep panel
-  sitrep_output <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_sitreps.png"))
-  ggsave(sitrep_panel, filename = sitrep_output, 
-         width = 8, height = 10, dpi = 300, bg = "white")
-  cat("Situation reports panel saved to:", sitrep_output, "\n")
+  # SIX-CHART COMPOSITE FIGURE
+  composite_figure_6chart <- p1 + sitrep_panel_1_6chart + sitrep_panel_2_6chart + 
+    plot_layout(ncol = 3, widths = c(1.5, 0.5, 0.5)) +
+    plot_annotation(
+      title = paste("East Troublesome Fire -", target_fire_year),
+      subtitle = "Fire progression map (left) and ICS-209+ situation report data (center and right)",
+      theme = theme(
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16)
+      )
+    )
+  
+  # Save the 6-chart composite figure
+  composite_figure_6chart
+  composite_output_6chart <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_composite_analysis_6chart.png"))
+  ggsave(composite_figure_6chart, filename = composite_output_6chart, 
+         width = 16, height = 8, dpi = 300, bg = "white")
+  cat("Six-chart composite figure saved to:", composite_output_6chart, "\n")
+  
+  # Also save individual sitrep panels
+  sitrep_output <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_sitreps_8chart.png"))
+  sitrep_panel_full <- sitrep_panel_1 + sitrep_panel_2 + plot_layout(ncol = 2)
+  ggsave(sitrep_panel_full, filename = sitrep_output, 
+         width = 12, height = 10, dpi = 300, bg = "white")
+  cat("Eight-chart situation reports panel saved to:", sitrep_output, "\n")
+  
+  sitrep_output_6chart <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_sitreps_6chart.png"))
+  sitrep_panel_6chart_full <- sitrep_panel_1_6chart + sitrep_panel_2_6chart + plot_layout(ncol = 2)
+  ggsave(sitrep_panel_6chart_full, filename = sitrep_output_6chart, 
+         width = 12, height = 8, dpi = 300, bg = "white")
+  cat("Six-chart situation reports panel saved to:", sitrep_output_6chart, "\n")
   
 } else {
   cat("Fire progression map not available - saving only situation reports\n")
-  sitrep_output <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_sitreps.png"))
-  ggsave(sitrep_panel, filename = sitrep_output, 
-         width = 8, height = 10, dpi = 300, bg = "white")
-  cat("Situation reports panel saved to:", sitrep_output, "\n")
+  sitrep_output <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_sitreps_8chart.png"))
+  sitrep_panel_full <- sitrep_panel_1 + sitrep_panel_2 + plot_layout(ncol = 2)
+  ggsave(sitrep_panel_full, filename = sitrep_output, 
+         width = 12, height = 10, dpi = 300, bg = "white")
+  cat("Eight-chart situation reports panel saved to:", sitrep_output, "\n")
+  
+  sitrep_output_6chart <- file.path(figures_dir, paste0(target_fire_name, "_", target_fire_year, "_sitreps_6chart.png"))
+  sitrep_panel_6chart_full <- sitrep_panel_1_6chart + sitrep_panel_2_6chart + plot_layout(ncol = 2)
+  ggsave(sitrep_panel_6chart_full, filename = sitrep_output_6chart, 
+         width = 12, height = 8, dpi = 300, bg = "white")
+  cat("Six-chart situation reports panel saved to:", sitrep_output_6chart, "\n")
 }
 
 cat("Analysis complete! All figures generated.\n")
