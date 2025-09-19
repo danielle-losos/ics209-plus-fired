@@ -553,10 +553,10 @@ if (exists("p1")) {  # Check if fire progression map was created successfully
     plot_layout(ncol = 3, widths = c(1.5, 0.5, 0.5)) +
     plot_annotation(
       title = paste("East Troublesome Fire -", target_fire_year),
-      subtitle = "Fire progression map (left) and ICS-209+ situation report data (center and right)",
+      #subtitle = "Fire progression map (left) and ICS-209+ situation report data (center and right)",
       theme = theme(
         plot.title = element_text(size = 20, face = "bold"),
-        plot.subtitle = element_text(size = 16)
+        #plot.subtitle = element_text(size = 16)
       )
     )
   
@@ -571,10 +571,10 @@ if (exists("p1")) {  # Check if fire progression map was created successfully
   composite_figure_6chart <- p1 + sitrep_panel_1_6chart + sitrep_panel_2_6chart + 
     plot_layout(ncol = 3, widths = c(1.5, 0.5, 0.5)) +
     plot_annotation(
-      title = paste("East Troublesome Fire -", target_fire_year),
-      subtitle = "Fire progression map (left) and ICS-209+ situation report data (center and right)",
+      title = paste("East Troublesome Fire, CO -", target_fire_year),
+      subtitle = "MODIS active fire detection product and linked ICS-209-PLUS",
       theme = theme(
-        plot.title = element_text(size = 20, face = "bold"),
+        plot.title = element_text(size = 25, face = "bold"),
         plot.subtitle = element_text(size = 16)
       )
     )
