@@ -23,19 +23,44 @@ lapply(packages, function(x){
 
 
 
-### Step 1: define projection
+### Step 1: define projection and configuration
 # EPSG:5070 - NAD83 / Conus Albers (meters)
 project_crs <- 5070
+
+## ========== CONFIGURATION ========== ##
+# Area of Interest
+aoi_name <- "CATN"  # Options: "westUS", "CATN", or add your own
+aoi_buffer_m <- 10000  # Buffer distance in meters
+
+# Geometry Type
+use_geometry <- "FIRED"  # Options: "FIRED" or "MTBS"
+
+# FIRED Perimeter Level
+use_daily_perims <- FALSE  # TRUE = use FIRED daily perimeters, FALSE = use FIRED event perimeters
+                           # Note: Daily perimeters only work with use_geometry = "FIRED"
 
 
 
 ### Step 2: load and buffer area of interest
-westUS <- st_read("data/spatial/raw/aoi/westUS_5070.gpkg") %>%
-  st_transform(project_crs)  # ensure it's in project CRS
 
-# Add buffer around AOI (in meters)
-westUS_buffered <- westUS %>%
-  st_buffer(dist = 10000)
+# Define AOI options (add more as needed)
+aoi_options <- list(
+  westUS = "data/spatial/raw/aoi/westUS_5070.gpkg",
+  CATN = "data/spatial/raw/aoi/CA_TN.gpkg"
+)
+
+# Check if selected AOI exists
+if (!aoi_name %in% names(aoi_options)) {
+  stop(paste("AOI", aoi_name, "not found. Available options:", paste(names(aoi_options), collapse = ", ")))
+}
+
+# Load selected AOI
+aoi <- st_read(aoi_options[[aoi_name]]) %>%
+  st_transform(project_crs)
+
+# Add buffer around AOI
+aoi_buffered <- aoi %>%
+  st_buffer(dist = aoi_buffer_m)
 
 
 
@@ -43,9 +68,9 @@ westUS_buffered <- westUS %>%
 
 ## FIRED - events
 # Perimeters updated: June 2025
-firedEvents <- st_read("data/spatial/raw/FIRED/fired_conus_ak_2000_to_2025_events/fired_conus_ak_2000_to_2025_events/fired_conus_ak_2000_to_2025_events.shp") %>%
+firedEvents <- st_read("data/spatial/raw/FIRED/fired_conus_ak_2000_to_2025_S5_T11/fired_conus_ak_2000_to_2025_S5_T11/fired_conus_ak_2000_to_2025_events.shp") %>%
   st_transform(project_crs) %>%  # reproject to project CRS
-  st_filter(westUS_buffered) %>%  # spatially filter to buffered AOI
+  st_filter(aoi_buffered) %>%  # spatially filter to buffered AOI
   # Add FIRED_ prefix to all columns except geometry
   rename_with(
     .fn = ~paste0("FIRED_", .x),
@@ -53,13 +78,13 @@ firedEvents <- st_read("data/spatial/raw/FIRED/fired_conus_ak_2000_to_2025_event
   )
 
 # Print FIRED time range
-cat("FIRED time range:", as.character(min(firedEvents$FIRED_ig_date, na.rm = TRUE)), "to", as.character(max(firedEvents$FIRED_late_date, na.rm = TRUE)), "\n")
+cat("FIRED time range:", min(firedEvents$FIRED_ig_date, na.rm = TRUE), "to", max(firedEvents$FIRED_last_date, na.rm = TRUE), "\n")
 
 ## MTBS perimeters
 # Downloaded from https://edcintl.cr.usgs.gov/downloads/sciweb1/shared/MTBS_Fire/data/composite_data/burned_area_extent_shapefile/mtbs_perimeter_data.zip
 mtbs <- st_read("data/spatial/raw/mtbs/mtbs_perimeter_data/mtbs_perims_DD.shp") %>%
   st_transform(project_crs) %>%  # reproject to project CRS
-  st_filter(westUS_buffered) %>%  # spatially filter to buffered AOI
+  st_filter(aoi_buffered) %>%  # spatially filter to buffered AOI
   mutate(Ig_Date = as.Date(Ig_Date)) %>%  # convert to date format
   # Add MTBS_ prefix to all columns except geometry
   rename_with(
@@ -71,7 +96,7 @@ mtbs <- st_read("data/spatial/raw/mtbs/mtbs_perimeter_data/mtbs_perims_DD.shp") 
 cat("MTBS time range:", as.character(min(mtbs$MTBS_Ig_Date, na.rm = TRUE)), "to", as.character(max(mtbs$MTBS_Ig_Date, na.rm = TRUE)), "\n")
 
 ## verify everything is in the same CRS!
-list(westUS = st_crs(westUS), westUS_buffered = st_crs(westUS_buffered), firedEvents = st_crs(firedEvents), mtbs = st_crs(mtbs))
+list(aoi = st_crs(aoi), aoi_buffered = st_crs(aoi_buffered), firedEvents = st_crs(firedEvents), mtbs = st_crs(mtbs))
 
 
 
@@ -143,7 +168,6 @@ joined_data <- joined_data %>%
   )
 
 # Check for duplicate IDs before filtering
-cat("\n--- Before filtering ---\n")
 cat("Duplicate FIRED IDs:", sum(duplicated(joined_data$FIRED_id)), "\n")
 cat("Duplicate MTBS IDs:", sum(duplicated(joined_data$MTBS_Event_ID)), "\n")
 
@@ -154,7 +178,7 @@ print(summary(joined_data$area_diff_km2))
 
 # quick vis
 ggplot(data=joined_data, aes(x=area_diff_km2)) + 
- geom_histogram(bins=10,binwidth=10)
+ geom_histogram(bins=100,binwidth=10)
 
 
 ## Ignition date differences check
@@ -182,7 +206,6 @@ joined_filtered <- joined_data %>%
   distinct(FIRED_id, .keep_all = TRUE)
 
 # Check for duplicates after filtering
-cat("\n--- After filtering ---\n")
 cat("Duplicate FIRED IDs:", sum(duplicated(joined_filtered$FIRED_id)), "\n")
 cat("Duplicate MTBS IDs:", sum(duplicated(joined_filtered$MTBS_Event_ID)), "\n")
 cat("Final joined features:", nrow(joined_filtered), "\n")
@@ -197,9 +220,6 @@ print(summary(joined_filtered$date_diff))
 
 
 ### Step 7: Create final dataset and export ###
-
-## OPTION: Choose which geometry to use ("FIRED" or "MTBS")
-use_geometry <- "FIRED"  # Change to "MTBS" if you want MTBS perimeters
 
 if (use_geometry == "FIRED") {
   
@@ -237,7 +257,6 @@ if (use_geometry == "FIRED") {
 }
 
 # Final check for duplicates
-cat("\n--- Final dataset ---\n")
 cat("Total features:", nrow(final_joined), "\n")
 cat("Total columns:", ncol(final_joined), "\n")
 cat("Duplicate FIRED IDs:", sum(duplicated(final_joined$FIRED_id)), "\n")
@@ -251,12 +270,68 @@ if (any(duplicated(toupper(names(final_joined))))) {
   cat("Column names OK for export\n")
 }
 
+
+
+### Step 8 (Optional): Expand to daily FIRED perimeters ###
+
+if (use_daily_perims & use_geometry == "FIRED") {
+  
+  # Load FIRED daily perimeters
+  cat("Loading FIRED daily perimeters...\n")
+  firedDaily <- st_read("data/spatial/raw/FIRED/fired_conus_ak_2000_to_2025_S5_T11/fired_conus_ak_2000_to_2025_S5_T11/fired_conus_ak_2000_to_2025_daily.shp") %>%
+    st_transform(project_crs) %>%
+    st_filter(aoi_buffered) %>%
+    # Rename id to FIRED_id for joining
+    rename(FIRED_id = id) %>%
+    # Add FIRED_DAILY_ prefix to daily-specific columns
+    rename(
+      FIRED_DAILY_did = did,
+      FIRED_DAILY_date = date,
+      FIRED_DAILY_pixels = pixels,
+      FIRED_DAILY_dy_ar_km2 = dy_ar_km2,
+      FIRED_DAILY_event_day = event_day
+    )
+  
+  cat("Loaded", nrow(firedDaily), "daily perimeters\n")
+  
+  # Join final_joined (event-level data) to daily perimeters
+  # This expands each event to multiple daily perimeters
+  final_joined <- firedDaily %>%
+    # Convert to tibble for join
+    as_tibble() %>%
+    # Join with event-level data (MTBS + FIRED events)
+    inner_join(
+      final_joined %>% as_tibble() %>% select(-geometry),
+      by = "FIRED_id"
+    ) %>%
+    # Convert back to sf object with daily geometry
+    st_as_sf() %>%
+    st_make_valid() %>%
+    st_cast("MULTIPOLYGON")
+  
+  cat("Expanded to", nrow(final_joined), "daily perimeters\n")
+  
+} else if (use_daily_perims & use_geometry == "MTBS") {
+  
+  cat("\nWarning: Daily perimeters only available with FIRED geometry. Skipping daily join.\n")
+  
+}
+
+# Create output filename with AOI, geometry type, and perimeter level
+perim_level <- ifelse(use_daily_perims & use_geometry == "FIRED", "daily", "events")
+output_filename <- paste0("data/spatial/mod/fired_mtbs_linked_", 
+                          aoi_name, "_", 
+                          tolower(use_geometry), "_",
+                          perim_level, "_geom.gpkg")
+
+cat("\nOutput filename:", output_filename, "\n")
+
 # Optional: Write to file
-st_write(final_joined, "data/spatial/mod/fired_mtbs_linked.gpkg", delete_dsn = TRUE)
+st_write(final_joined, output_filename, delete_dsn = TRUE)
 
 
 
-### Step 8 (Optional): Visualize results ###
+### Step 9 (Optional): Visualize results ###
 
 # Histogram of area differences
 ggplot(data = final_joined, aes(x = area_diff_km2)) +
