@@ -522,9 +522,9 @@ class EventGrid(Base):
                     left = 0
                     right = nz
                 else:
-                    n = int(valid_center_burn_indices[i] - time_index_buffer)
-                    left = max(0, n)
-                    right = min(nz, n + 1)
+                    center_idx = int(valid_center_burn_indices[i])
+                    left = max(0, center_idx - time_index_buffer)
+                    right = min(nz, center_idx + time_index_buffer + 1)
 
                 burn_window = window[left:right, :, :]
                 val_locs = np.where(
