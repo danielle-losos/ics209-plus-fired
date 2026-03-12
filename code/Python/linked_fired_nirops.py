@@ -34,20 +34,18 @@ USE_DAILY_PERIMS = False
 # -----------------------------------------------------------------------------
 # Step 2: load and buffer AOI
 # -----------------------------------------------------------------------------
+BASE_DIR = Path("/Users/dalo2903/Downloads/data/spatial/raw")
+
 AOI_OPTIONS = {
-    "westUS": Path("data/spatial/raw/aoi/westUS_5070.gpkg"),
-    "CATN": Path("data/spatial/raw/aoi/CA_TN.gpkg"),
+    "westUS": BASE_DIR / "aoi/westUS_5070.gpkg",
+    "CATN": BASE_DIR / "aoi/CA_TN.gpkg",
 }
 
-FIRED_EVENTS_PATH = Path(
-    "data/spatial/raw/FIRED/"
-    "fired_conus_ak_2000_to_2025_S5_T11/"
-    "fired_conus_ak_2000_to_2025_S5_T11/"
-    "fired_conus_ak_2000_to_2025_events.shp"
-)
+FIRED_EVENTS_PATH = BASE_DIR / "FIRED/fired_conus_ak_2000_to_2025_S5_T11/" \
+                                "fired_conus_ak_2000_to_2025_S5_T11/" \
+                                "fired_conus_ak_2000_to_2025_events.shp"
 
-NIROPS_PATH = Path("data/spatial/raw/NIROPS_2020_2023/NIROPS_2020_2023.shp")
-
+NIROPS_PATH = BASE_DIR / "NIROPS_2020_2023/NIROPS_2020_2023.shp"
 
 def load_aoi(aoi_name: str, project_crs: str, buffer_m: float) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     if aoi_name not in AOI_OPTIONS:
