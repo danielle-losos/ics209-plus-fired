@@ -34,18 +34,18 @@ USE_DAILY_PERIMS = False
 # Step 2: load and buffer AOI
 # -----------------------------------------------------------------------------
 AOI_OPTIONS = {
-    "westUS": Path("data/spatial/raw/aoi/westUS_5070.gpkg"),
-    "CATN": Path("data/spatial/raw/aoi/CA_TN.gpkg"),
+    "westUS": Path("/Users/dalo2903/Downloads/data/spatial/raw/aoi/westUS_5070.gpkg"),
+    "CATN": Path("/Users/dalo2903/Downloads/data/spatial/raw/aoi/CA_TN.gpkg"),
 }
 
 FIRED_EVENTS_PATH = Path(
-    "data/spatial/raw/FIRED/"
+    "/Users/dalo2903/Downloads/data/spatial/raw/FIRED/"
     "fired_conus_ak_2000_to_2025_S5_T11/"
     "fired_conus_ak_2000_to_2025_S5_T11/"
     "fired_conus_ak_2000_to_2025_events.shp"
 )
 
-MTBS_PATH = Path("data/spatial/raw/mtbs/mtbs_perimeter_data/mtbs_perims_DD.shp")
+MTBS_PATH = Path("/Users/dalo2903/Downloads/data/spatial/raw/mtbs/mtbs_perimeter_data/mtbs_perims_DD.shp")
 
 
 def load_aoi(aoi_name: str, project_crs: str, buffer_m: float) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
