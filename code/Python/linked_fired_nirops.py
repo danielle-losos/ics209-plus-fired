@@ -1,7 +1,7 @@
-"""Link NIROPS and FIRED wildfire events.
+"""Link NIROPS and FIRED wildfire perimeters.
 
 Python adaptation of `code/Python/link_fired_mtbs.py`, substituting MTBS
-perimeters with NIROPS perimeters.
+perimeters with NIROPS perimeters and matching FIRED daily perimeters by date.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ AOI_OPTIONS = {
     "CATN": BASE_DIR / "aoi/CA_TN.gpkg",
 }
 
-FIRED_EVENTS_PATH = BASE_DIR / "FIRED/fired_conus_ak_2000_to_2025_S5_T11/" \
-                                "fired_conus_ak_2000_to_2025_S5_T11/" \
-                                "fired_conus_ak_2000_to_2025_events.shp"
+FIRED_DAILY_PATH = BASE_DIR / "FIRED/fired_conus_ak_2000_to_2025_S5_T11/" \
+                              "fired_conus_ak_2000_to_2025_S5_T11/" \
+                              "fired_conus_ak_2000_to_2025_daily.shp"
 
 NIROPS_PATH = BASE_DIR / "NIROPS_2020_2023/NIROPS_2020_2023.shp"
 
@@ -85,36 +85,42 @@ def make_multipolygon(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def prepare_perimeters(aoi_buffered: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
-    # FIRED events
-    fired_events = gpd.read_file(FIRED_EVENTS_PATH).to_crs(PROJECT_CRS)
-    fired_events = spatial_filter_to_aoi(fired_events, aoi_buffered)
-    fired_events["ig_date"] = pd.to_datetime(fired_events["ig_date"], errors="coerce")
-    fired_events["last_date"] = pd.to_datetime(fired_events["last_date"], errors="coerce")
-    fired_events = make_multipolygon(fired_events)
-    fired_events = prefix_columns(fired_events, "FIRED_")
+    # FIRED daily perimeters
+    fired_daily = gpd.read_file(FIRED_DAILY_PATH).to_crs(PROJECT_CRS)
+    fired_daily = spatial_filter_to_aoi(fired_daily, aoi_buffered)
+
+    fired_date_col = "UTC" if "UTC" in fired_daily.columns else "DateUTC"
+    if fired_date_col not in fired_daily.columns:
+        raise KeyError("FIRED daily shapefile must contain either 'UTC' or 'DateUTC'.")
+
+    fired_daily[fired_date_col] = pd.to_datetime(fired_daily[fired_date_col], errors="coerce")
+    fired_daily["perim_date"] = fired_daily[fired_date_col].dt.normalize()
+    fired_daily = make_multipolygon(fired_daily)
+    fired_daily = prefix_columns(fired_daily, "FIRED_")
 
     print(
-        "FIRED time range:",
-        fired_events["FIRED_ig_date"].min(),
+        "FIRED daily time range:",
+        fired_daily["FIRED_perim_date"].min(),
         "to",
-        fired_events["FIRED_last_date"].max(),
+        fired_daily["FIRED_perim_date"].max(),
     )
 
     # NIROPS perimeters
     nirops = gpd.read_file(NIROPS_PATH).to_crs(PROJECT_CRS)
     nirops = spatial_filter_to_aoi(nirops, aoi_buffered)
     nirops["DateUTC"] = pd.to_datetime(nirops["DateUTC"], errors="coerce")
+    nirops["perim_date"] = nirops["DateUTC"].dt.normalize()
     nirops = make_multipolygon(nirops)
     nirops = prefix_columns(nirops, "NIROPS_")
 
     print(
         "NIROPS time range:",
-        nirops["NIROPS_DateUTC"].min(),
+        nirops["NIROPS_perim_date"].min(),
         "to",
-        nirops["NIROPS_DateUTC"].max(),
+        nirops["NIROPS_perim_date"].max(),
     )
 
-    return fired_events, nirops
+    return fired_daily, nirops
 
 
 def join_largest_overlap(nirops_yr: gpd.GeoDataFrame, fired_yr: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -152,22 +158,21 @@ def join_largest_overlap(nirops_yr: gpd.GeoDataFrame, fired_yr: gpd.GeoDataFrame
     return gpd.GeoDataFrame(best, geometry="geometry", crs=nirops_yr.crs)
 
 
-def run_join(fired_events: gpd.GeoDataFrame, nirops: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    fired_years = set(fired_events["FIRED_ig_date"].dt.year.dropna().astype(int).tolist())
-    nirops_years = set(nirops["NIROPS_DateUTC"].dt.year.dropna().astype(int).tolist())
-    years = sorted(fired_years.intersection(nirops_years))
+def run_join(fired_daily: gpd.GeoDataFrame, nirops: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    fired_dates = set(fired_daily["FIRED_perim_date"].dropna().tolist())
+    nirops_dates = set(nirops["NIROPS_perim_date"].dropna().tolist())
+    dates = sorted(fired_dates.intersection(nirops_dates))
 
-    if not years:
-        raise RuntimeError("No overlapping years found between FIRED and NIROPS.")
+    if not dates:
+        raise RuntimeError("No overlapping daily dates found between FIRED and NIROPS.")
 
-    print(f"Join years between NIROPS and FIRED: {min(years)} - {max(years)}")
+    print(f"Join dates between NIROPS and FIRED: {dates[0].date()} - {dates[-1].date()}")
 
     joins: list[gpd.GeoDataFrame] = []
-    for yr in years:
-        print(f"Processing year: {yr}")
-        fired_yr = fired_events[fired_events["FIRED_ig_date"].dt.year == yr].copy()
-        nirops_yr = nirops[nirops["NIROPS_DateUTC"].dt.year == yr].copy()
-        joined = join_largest_overlap(nirops_yr, fired_yr)
+    for date in dates:
+        fired_day = fired_daily[fired_daily["FIRED_perim_date"] == date].copy()
+        nirops_day = nirops[nirops["NIROPS_perim_date"] == date].copy()
+        joined = join_largest_overlap(nirops_day, fired_day)
         if not joined.empty:
             joins.append(joined)
 
@@ -184,12 +189,19 @@ def summarize_and_filter(joined_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     joined_data = joined_data[joined_data["FIRED_id"].notna()].copy()
 
     joined_data["nirops_km2"] = joined_data["NIROPS_Acres"] * 0.00404686
-    joined_data["area_diff_km2"] = (joined_data["FIRED_tot_ar_km2"] - joined_data["nirops_km2"]).abs()
+    if "FIRED_daily_ar_km2" in joined_data.columns:
+        fired_area_col = "FIRED_daily_ar_km2"
+    elif "FIRED_tot_ar_km2" in joined_data.columns:
+        fired_area_col = "FIRED_tot_ar_km2"
+    else:
+        raise KeyError("Expected FIRED area column not found (FIRED_daily_ar_km2 or FIRED_tot_ar_km2).")
+
+    joined_data["area_diff_km2"] = (joined_data[fired_area_col] - joined_data["nirops_km2"]).abs()
     joined_data["date_diff"] = (
-        (joined_data["NIROPS_DateUTC"] - joined_data["FIRED_ig_date"]).dt.days.abs()
+        (joined_data["NIROPS_perim_date"] - joined_data["FIRED_perim_date"]).dt.days.abs()
     )
     joined_data["perc_diff"] = (
-        (joined_data["FIRED_tot_ar_km2"] - joined_data["nirops_km2"]).abs() / joined_data["nirops_km2"]
+        (joined_data[fired_area_col] - joined_data["nirops_km2"]).abs() / joined_data["nirops_km2"]
     ) * 100
 
     print(f"Duplicate FIRED IDs: {joined_data['FIRED_id'].duplicated().sum()}")
@@ -242,16 +254,16 @@ print(
 )
 
 aoi, aoi_buffered = load_aoi(AOI_NAME, PROJECT_CRS, AOI_BUFFER_M)
-fired_events, nirops = prepare_perimeters(aoi_buffered)
+fired_daily, nirops = prepare_perimeters(aoi_buffered)
 
 print(
     {
         "aoi": aoi.crs,
         "aoi_buffered": aoi_buffered.crs,
-        "firedEvents": fired_events.crs,
+        "firedDaily": fired_daily.crs,
         "nirops": nirops.crs,
     }
 )
 
-joined_data = run_join(fired_events, nirops)
+joined_data = run_join(fired_daily, nirops)
 _ = summarize_and_filter(joined_data)
