@@ -90,12 +90,8 @@ def prepare_perimeters(aoi_buffered: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame
     fired_daily = gpd.read_file(FIRED_DAILY_PATH).to_crs(PROJECT_CRS)
     fired_daily = spatial_filter_to_aoi(fired_daily, aoi_buffered)
 
-    fired_date_col = "UTC" if "UTC" in fired_daily.columns else "DateUTC"
-    if fired_date_col not in fired_daily.columns:
-        raise KeyError("FIRED daily shapefile must contain either 'UTC' or 'DateUTC'.")
-
-    fired_daily[fired_date_col] = pd.to_datetime(fired_daily[fired_date_col], errors="coerce")
-    fired_daily["perim_date"] = fired_daily[fired_date_col].dt.normalize()
+    fired_daily['date'] = pd.to_datetime(fired_daily['date'], errors="coerce")
+    fired_daily["perim_date"] = fired_daily['date'].dt.normalize()
     fired_daily = make_multipolygon(fired_daily)
     fired_daily = prefix_columns(fired_daily, "FIRED_")
 
