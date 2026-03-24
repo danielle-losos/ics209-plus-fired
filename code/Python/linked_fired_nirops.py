@@ -222,9 +222,10 @@ def summarize_and_filter(joined_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     joined_data["date_diff"].plot.hist(ax=axes[1], bins=10)
     axes[1].set_title("Date difference (days)")
     plt.tight_layout()
-    plt.show()
+    #plt.show()
 
-    joined_filtered = joined_data[
+    joined_filtered = joined_data.copy()
+    '''joined_filtered = joined_data[
         (joined_data["date_diff"] <= 25)
         & ((joined_data["area_diff_km2"] < 202.34) | (joined_data["perc_diff"] < 50))
     ].copy()
@@ -233,7 +234,7 @@ def summarize_and_filter(joined_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         joined_filtered.sort_values("perc_diff")
         .drop_duplicates(subset=["FIRED_id"], keep="first")
         .copy()
-    )
+    )'''
 
     print(f"Duplicate FIRED IDs: {joined_filtered['FIRED_id'].duplicated().sum()}")
     print(
@@ -250,26 +251,12 @@ def summarize_and_filter(joined_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     return joined_filtered
 
-
-print(
-    f"Configuration: AOI={AOI_NAME}, buffer={AOI_BUFFER_M} m, "
-    f"geometry={USE_GEOMETRY}, daily_perims={USE_DAILY_PERIMS}"
-)
-
 aoi, aoi_buffered = load_aoi(AOI_NAME, PROJECT_CRS, AOI_BUFFER_M)
 fired_daily, nirops = prepare_perimeters(aoi_buffered)
 
-print(
-    {
-        "aoi": aoi.crs,
-        "aoi_buffered": aoi_buffered.crs,
-        "firedDaily": fired_daily.crs,
-        "nirops": nirops.crs,
-    }
-)
-
 joined_data = run_join(fired_daily, nirops)
-joined_filtered = summarize_and_filter(joined_data)
+#joined_filtered = summarize_and_filter(joined_data)
+joined_filtered = joined_data.drop(columns=["FIRED_orig_geometry"])
 # NIROPS layer
 joined_filtered.drop(columns="FIRED_geometry").to_file(OUTPUT_PATH, layer="nirops", driver="GPKG")
 # FIRED layer
