@@ -69,6 +69,15 @@ data/spatial/mod/ics-fired/intermediate/mtbs_perims_w_incidents.gpkg
 data/tabular/mod/ics-spatial/For_Publication
 data/tabular/mod/ics-spatial/For_Publication/
 
+# Ignore outputs and large geospatial files
+output/
+*.gpkg
+*.shp
+*.zip
+*.log
+__pycache__/
+*.pyc
+
 # File types
 !*.gpkg-shm
 !*.gpkg-wal
