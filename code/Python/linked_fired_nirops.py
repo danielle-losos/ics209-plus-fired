@@ -46,6 +46,7 @@ FIRED_DAILY_PATH = BASE_DIR / "FIRED/fired_conus_ak_2000_to_2025_S5_T11/" \
                               "fired_conus_ak_2000_to_2025_daily.shp"
 
 NIROPS_PATH = BASE_DIR / "NIROPS_2020_2023/NIROPS_2020_2023.shp"
+OUTPUT_PATH = BASE_DIR / "NIROPS_2020_2023/linked_fired_nirops_final.gpkg"
 
 def load_aoi(aoi_name: str, project_crs: str, buffer_m: float) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     if aoi_name not in AOI_OPTIONS:
@@ -266,4 +267,7 @@ print(
 )
 
 joined_data = run_join(fired_daily, nirops)
-_ = summarize_and_filter(joined_data)
+joined_filtered = summarize_and_filter(joined_data)
+OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+joined_filtered.to_file(OUTPUT_PATH, driver="GPKG")
+print(f"Saved final joined GeoDataFrame to: {OUTPUT_PATH}")
