@@ -89,6 +89,8 @@ def prepare_perimeters(aoi_buffered: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame
     # FIRED daily perimeters
     fired_daily = gpd.read_file(FIRED_DAILY_PATH).to_crs(PROJECT_CRS)
     fired_daily = spatial_filter_to_aoi(fired_daily, aoi_buffered)
+    # Preserve the full FIRED perimeter geometry before any explode/splitting.
+    fired_daily["orig_geometry"] = fired_daily.geometry
 
     fired_daily['date'] = pd.to_datetime(fired_daily['date'], errors="coerce")
     fired_daily["perim_date"] = fired_daily['date'].dt.normalize()
@@ -134,10 +136,11 @@ def join_largest_overlap(nirops_yr: gpd.GeoDataFrame, fired_yr: gpd.GeoDataFrame
 
     fired_lookup = fired_yr.geometry
     candidates = candidates.copy()
+    fired_orig_lookup = fired_yr["FIRED_orig_geometry"]
     candidates["FIRED_geometry"] = gpd.GeoSeries(
-    candidates["index_right"].apply(lambda idx: fired_lookup.loc[idx]),
-    crs=fired_yr.crs
-)
+        candidates["index_right"].apply(lambda idx: fired_orig_lookup.loc[idx]),
+        crs=fired_yr.crs,
+    )
     overlap_areas = []
     for _, row in candidates.iterrows():
         right_idx = row["index_right"]
@@ -267,6 +270,10 @@ print(
 
 joined_data = run_join(fired_daily, nirops)
 joined_filtered = summarize_and_filter(joined_data)
+
+if "FIRED_orig_geometry" in joined_filtered.columns:
+    joined_filtered = joined_filtered.drop(columns=["FIRED_orig_geometry"])
+
 # NIROPS layer
 joined_filtered.drop(columns="FIRED_geometry").to_file(OUTPUT_PATH, layer="nirops", driver="GPKG")
 # FIRED layer
