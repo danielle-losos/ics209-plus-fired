@@ -138,13 +138,14 @@ def join_largest_overlap(nirops_yr: gpd.GeoDataFrame, fired_yr: gpd.GeoDataFrame
         return candidates
 
     fired_lookup = fired_yr.geometry
+    candidates = candidates.copy()
+    candidates["FIRED_geometry"] = candidates["index_right"].map(fired_lookup)
     overlap_areas = []
     for _, row in candidates.iterrows():
         right_idx = row["index_right"]
         inter = row.geometry.intersection(fired_lookup.loc[right_idx])
         overlap_areas.append(inter.area)
 
-    candidates = candidates.copy()
     candidates["_overlap_area"] = overlap_areas
     best = (
         candidates.sort_values("_overlap_area", ascending=False)
