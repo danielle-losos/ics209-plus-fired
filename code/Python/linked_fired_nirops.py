@@ -12,6 +12,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import pandas as pd
 from shapely.geometry import MultiPolygon, Polygon
+from shapely.ops import unary_union
 
 
 # -----------------------------------------------------------------------------
@@ -122,7 +123,7 @@ def prepare_perimeters(aoi_buffered: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame
     return fired_daily, nirops
 
 def join_largest_overlap(nirops_yr: gpd.GeoDataFrame, fired_yr: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Return NIROPS->FIRED spatial join keeping only largest overlap for each NIROPS fire."""
+    """Return NIROPS->FIRED spatial join with FIRED geometry unioned per NIROPS feature."""
     if nirops_yr.empty or fired_yr.empty:
         return gpd.GeoDataFrame(
             columns=list(nirops_yr.columns) + [c for c in fired_yr.columns if c != "geometry"],
@@ -136,29 +137,27 @@ def join_largest_overlap(nirops_yr: gpd.GeoDataFrame, fired_yr: gpd.GeoDataFrame
 
     fired_lookup = fired_yr.geometry
     candidates = candidates.copy()
-    fired_orig_lookup = fired_yr["FIRED_orig_geometry"]
-    candidates["FIRED_geometry"] = gpd.GeoSeries(
-        candidates["index_right"].apply(lambda idx: fired_orig_lookup.loc[idx]),
-        crs=fired_yr.crs,
-    )
-    overlap_areas = []
-    for _, row in candidates.iterrows():
-        right_idx = row["index_right"]
-        inter = row.geometry.intersection(fired_lookup.loc[right_idx])
-        overlap_areas.append(inter.area)
+    candidates["FIRED_geometry"] = candidates["index_right"].apply(lambda idx: fired_lookup.loc[idx])
 
-    candidates["_overlap_area"] = overlap_areas
-    best = (
-        candidates.sort_values("_overlap_area", ascending=False)
-        .groupby(candidates.index)
-        .head(1)
-        .drop(columns=["_overlap_area", "index_right"])
+    grouped = candidates.groupby(candidates.index)
+    result = grouped.agg(
+        {
+            **{
+                col: "first"
+                for col in candidates.columns
+                if col not in ["FIRED_geometry", "geometry", "index_right"]
+            },
+            "FIRED_geometry": lambda geoms: unary_union(list(geoms)),
+            "geometry": "first",
+        }
     )
 
-    if "geometry_right" in best.columns:
-        best = best.drop(columns=["geometry_right"])
+    if "geometry_right" in result.columns:
+        result = result.drop(columns=["geometry_right"])
 
-    return gpd.GeoDataFrame(best, geometry="geometry", crs=nirops_yr.crs)
+    result = gpd.GeoDataFrame(result, geometry="geometry", crs=nirops_yr.crs)
+    result["FIRED_geometry"] = gpd.GeoSeries(result["FIRED_geometry"], crs=fired_yr.crs)
+    return result
 
 
 def run_join(fired_daily: gpd.GeoDataFrame, nirops: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
