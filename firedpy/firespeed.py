@@ -150,7 +150,7 @@ def computefirespeed(fire_gdf, id_col="id"):
             [best_origin[1], best_dest[1]]
         )
 
-        dist_m = np.linalg.norm(np.array(best_dest) - np.array(best_origin))
+        dist_m = geod.line_length(lons, lats)
 
 
         result_max_dist[i] = dist_m / 1000
@@ -232,11 +232,22 @@ def compute_max_vector(perim_inner_geoms,
                 if test_line.length == 0:
                     continue
 
+                line_parent_intersection = test_line.intersection(parent_poly.exterior)
+                if not line_parent_intersection.is_empty:
+                    from shapely.geometry import MultiPoint, GeometryCollection
+                    if hasattr(line_parent_intersection, 'geoms'):
+                        n_crossings = len(line_parent_intersection.geoms)
+                    else:
+                        n_crossings = 1
+                    if n_crossings > 1:
+                        continue  # vector crosses through parent — skip this candidate
+
                 sample_step = min(50, test_line.length)
                 n_samples = max(2, int(math.ceil((test_line.length - sample_step) / 50)) + 1)
                 sample_distances = np.linspace(sample_step, test_line.length, n_samples)
-                invalid_vector = any(parent_poly.covers(test_line.interpolate(sample_dist))
-                                     for sample_dist in sample_distances)
+                valid_region = parent_poly.union(outer_poly)
+                invalid_vector = any(not valid_region.covers(test_line.interpolate(sample_dist))
+                        for sample_dist in sample_distances)
 
                 if invalid_vector:
                     continue
