@@ -113,9 +113,7 @@ def computefirespeed(fire_gdf, id_col="id"):
             dist, origin, dest, parent_local_idx = compute_max_vector(
                 perim_inner_geoms=parent_geoms,
                 perim_outer_geoms=[child_poly],
-                inter_matrix=inter_matrix[parent_ids][:, [j]],
-                spot_threshold=4000,
-            )
+                inter_matrix=inter_matrix[parent_ids][:, [j]],)
 
             if dist > best_dist:
                 best_dist = dist
@@ -145,7 +143,7 @@ def computefirespeed(fire_gdf, id_col="id"):
 def compute_max_vector(perim_inner_geoms,
                        perim_outer_geoms,
                        inter_matrix,
-                       spot_threshold=4000):
+                       spot_threshold=20000):
 
     result_dist = []
     result_coord_pair = []
